@@ -1,11 +1,22 @@
 import { createApp } from 'vue'
 import App from './App.vue'
-import router from './router'
+import { createRouter, createWebHistory } from 'vue-router'
 
-import './assets/main.css'
+// Styles
+import 'bootstrap/scss/bootstrap.scss'
+import '@/style/styles.scss'
 
-const app = createApp(App)
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: [
+    {
+      path: '/',
+      name: 'home',
+      component: () => import('./components/pages/CanvasTest.vue')
+    }
+  ]
+})
 
-app.use(router)
-
-app.mount('#app')
+createApp(App)
+  .use(router)
+  .mount('#app')
