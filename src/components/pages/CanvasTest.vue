@@ -5,10 +5,19 @@
 </template>
 
 <script lang="ts" setup>
-import { greet } from '@engine/canvas_test'
-import { onMounted } from 'vue';
+import { greet, init } from '@engine/canvas_test'
+import { onMounted, ref } from 'vue';
 
-onMounted(greet);
+let what = ref<HTMLCanvasElement>();
+
+onMounted(() => {
+  if (!what.value) throw new Error('No canvas yet?')
+
+  what.value.width = what.value.clientWidth
+  what.value.height = what.value.clientHeight
+  
+  init(what.value)
+})
 </script>
 
 <style lang="scss" scoped>
