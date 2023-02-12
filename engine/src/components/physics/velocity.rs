@@ -1,12 +1,12 @@
 use specs::prelude::*;
 
 pub struct Velocity {
-    pub vx: u32,
-    pub vy: u32
+    pub vx: i32,
+    pub vy: i32
 }
 
 impl Velocity {
-    pub fn new(vx: u32, vy: u32) -> Self {
+    pub fn new(vx: i32, vy: i32) -> Self {
         Self { vx, vy }
     }
 }

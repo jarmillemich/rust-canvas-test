@@ -88,13 +88,16 @@ fn init_world(canvas: web_sys::HtmlCanvasElement) -> World {
     world.register::<Velocity>();
     world.register::<Gravity>();
 
-    world.create_entity()
-        .with(Position::new(0, 0))
-        .with(Velocity::new(1, 1))
-        .with(Gravity)
-        .build();
+    // Testing entity
+    for x in 0..8 {
+        world.create_entity()
+            .with(Position::new(-1024 * x, -1024))
+            .with(Velocity::new(128, 0))
+            .with(Gravity)
+            .build();
+    }
 
-    world.insert(init_renderer(canvas));
+    world.insert(init_renderer(canvas).unwrap());
 
     world
 }
@@ -102,6 +105,8 @@ fn init_world(canvas: web_sys::HtmlCanvasElement) -> World {
 fn init_dispatcher() -> Dispatcher<'static, 'static> {
     DispatcherBuilder::new()
         .with(systems::SysMovement, "Movement", &[])
+        .with(systems::SysGravity, "Gravity", &[])
+        .with(systems::SysRenderer, "Renderer", &[])
         .build()
 }
 
