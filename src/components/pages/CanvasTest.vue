@@ -5,7 +5,7 @@
 </template>
 
 <script lang="ts" setup>
-import { greet, init } from '@engine/canvas_test'
+import { greet, init, Engine } from '@engine/canvas_test'
 import { onMounted, ref } from 'vue';
 
 let what = ref<HTMLCanvasElement>();
@@ -16,7 +16,9 @@ onMounted(() => {
   what.value.width = what.value.clientWidth
   what.value.height = what.value.clientHeight
   
-  init(what.value)
+  let engine = init(what.value)
+  console.log(engine)
+  engine.start();
 })
 </script>
 
