@@ -1,9 +1,18 @@
 #![feature(box_syntax)]
 
+// This might be a fun exercise for later. For now using the fixed crate
+// mod fixedPoint;
+
 mod utils;
 mod components;
 mod systems;
 
+mod input;
+mod action;
+
+use std::sync::Arc;
+
+use input::EventQueue;
 use wasm_bindgen::prelude::*;
 mod engine;
 mod renderer;

@@ -2,7 +2,7 @@ use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader};
 use wasm_bindgen::prelude::*;
 
 
-pub fn init_renderer(canvas: web_sys::HtmlCanvasElement) -> Option<Renderer> {
+pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
     let context = canvas
         .get_context("webgl2")
         .unwrap()?

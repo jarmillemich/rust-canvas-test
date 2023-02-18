@@ -1,24 +1,34 @@
 <template>
   <section>
-    <canvas ref="what" class="w-100 h-100" />
+    <canvas ref="canvas" class="w-100 h-100" />
   </section>
 </template>
 
 <script lang="ts" setup>
-import { greet, init, Engine } from '@engine/canvas_test'
-import { onMounted, ref } from 'vue';
+import { useListener } from '@/usables/useListener';
+import { Engine, EventQueue, init } from '@engine/canvas_test';
+import { onMounted, onUnmounted, ref } from 'vue';
 
-let what = ref<HTMLCanvasElement>();
+let canvas = ref<HTMLCanvasElement>();
+
+let engine: Engine
 
 onMounted(() => {
-  if (!what.value) throw new Error('No canvas yet?')
+  if (!canvas.value) throw new Error('No canvas yet?')
 
-  what.value.width = what.value.clientWidth
-  what.value.height = what.value.clientHeight
+  canvas.value.width = canvas.value.clientWidth
+  canvas.value.height = canvas.value.clientHeight
+ 
   
-  let engine = init(what.value)
+  engine = init(canvas.value)
   console.log(engine)
   engine.start();
+})
+
+onUnmounted(() => {
+  // Clean up our resources
+  console.log('Cleaning up')
+  engine.free()
 })
 </script>
 

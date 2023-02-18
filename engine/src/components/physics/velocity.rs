@@ -1,12 +1,14 @@
 use specs::prelude::*;
 
+use crate::action::FixedPoint;
+
 pub struct Velocity {
-    pub vx: i32,
-    pub vy: i32
+    pub vx: FixedPoint,
+    pub vy: FixedPoint
 }
 
 impl Velocity {
-    pub fn new(vx: i32, vy: i32) -> Self {
+    pub fn new(vx: FixedPoint, vy: FixedPoint) -> Self {
         Self { vx, vy }
     }
 }
