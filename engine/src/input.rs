@@ -32,7 +32,7 @@ impl EventQueue {
         // TODO probably some great leaking going on here
         self.listen(el, "mousemove", |queue, event: web_sys::MouseEvent| {
             queue.lock().unwrap().push_back(InputEvent::MouseMove { x: event.x(), y: event.y() });
-            console::log_1(&format!("Have {} events", queue.lock().unwrap().len()).into());
+            //console::log_1(&format!("Have {} events", queue.lock().unwrap().len()).into());
         });
     }
 

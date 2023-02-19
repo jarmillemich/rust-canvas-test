@@ -10,9 +10,6 @@ mod systems;
 mod input;
 mod action;
 
-use std::sync::Arc;
-
-use input::EventQueue;
 use wasm_bindgen::prelude::*;
 mod engine;
 mod renderer;
@@ -26,16 +23,6 @@ use crate::engine::Engine;
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
-#[wasm_bindgen]
-extern {
-    fn alert(s: &str);
-}
-
-#[wasm_bindgen]
-pub fn greet() {
-    alert("Hello, wasm-game-of-life!");
-}
 
 #[wasm_bindgen]
 pub fn init(canvas: web_sys::HtmlCanvasElement) -> Result<Engine, JsValue> {

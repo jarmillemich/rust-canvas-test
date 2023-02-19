@@ -104,7 +104,7 @@ fn init_world(canvas: &web_sys::HtmlCanvasElement) -> World {
         let ent = world.create_entity()
             .with(Position::new(FixedPoint::from_num(-32 * x), FixedPoint::from_num(-8)))
             .with(Velocity::new(FixedPoint::from_num(1), FixedPoint::from_num(-0.2 * x as f32)))
-            .with(Color::new(16 * x as u8, 255 - 16 * x as u8, 128, 255))
+            .with(Color::new(20 * x as u8, 255 - 16 * x as u8, 0, 255))
             .with(Gravity)
             .build();
     }
