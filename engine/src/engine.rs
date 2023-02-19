@@ -8,6 +8,7 @@ use specs::shrev::Event;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
 use crate::action::FixedPoint;
+use crate::components::graphics::Color;
 use crate::components::physics::{Gravity, Position, Velocity};
 use crate::input::EventQueue;
 use crate::renderer::init_renderer;
@@ -96,12 +97,14 @@ fn init_world(canvas: &web_sys::HtmlCanvasElement) -> World {
     world.register::<Position>();
     world.register::<Velocity>();
     world.register::<Gravity>();
+    world.register::<Color>();
 
     // Testing entity
     for x in 0..8 {
         let ent = world.create_entity()
             .with(Position::new(FixedPoint::from_num(-32 * x), FixedPoint::from_num(-8)))
             .with(Velocity::new(FixedPoint::from_num(1), FixedPoint::from_num(-0.2 * x as f32)))
+            .with(Color::new(16 * x as u8, 255 - 16 * x as u8, 128, 255))
             .with(Gravity)
             .build();
     }

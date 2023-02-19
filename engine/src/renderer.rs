@@ -15,12 +15,14 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
         r##"#version 300 es
  
         in vec4 position;
+        in vec4 color;
+
         out vec4 v_color;
 
         void main() {
         
             gl_Position = position;
-            v_color = position;
+            v_color = color;
         }
         "##,
     ).unwrap();
@@ -36,8 +38,8 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
         
         void main() {
 
-            outColor = vec4(1, 0.5, 0.0, 0.5);
-            //outColor = v_color;
+            //outColor = vec4(1, 0.5, 0.0, 0.5);
+            outColor = v_color;
         }
         "##,
     ).unwrap();
@@ -45,25 +47,53 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
     let program = link_program(&context, &vert_shader, &frag_shader).unwrap();
 
     context.use_program(Some(&program));
+
+    let position_attribute_location = context.get_attrib_location(&program, "position") as u32;
+    let color_attribute_location = context.get_attrib_location(&program, "color") as u32;
     
     Some(Renderer {
         context,
         program,
+
+        position_attribute_location,
+        color_attribute_location,
     })
 }
 
 pub struct Renderer {
     context: WebGl2RenderingContext,
     program: WebGlProgram,
+
+    // Shader attributes
+    position_attribute_location: u32,
+    color_attribute_location: u32,
 }
 
 impl Renderer {
-    pub fn draw(&mut self, vertices: [f32; 6]) {
+    pub fn draw(&mut self, vertices: [f32; 6], color: [f32; 4]) {
         let context = &self.context;
 
-        let position_attribute_location = context.get_attrib_location(&self.program, "position");
+        
+        let color_buffer = context.create_buffer().ok_or("Failed to create buffer").unwrap();
+        context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&color_buffer));
+
+        unsafe {
+            let color_array_buf_view = js_sys::Float32Array::view(&color);
+
+            context.buffer_data_with_array_buffer_view(
+                WebGl2RenderingContext::ARRAY_BUFFER,
+                &color_array_buf_view,
+                WebGl2RenderingContext::STATIC_DRAW,
+            );
+        }
+
+        
+
+        
         let buffer = context.create_buffer().ok_or("Failed to create buffer").unwrap();
         context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
+
+        
 
         // Note that `Float32Array::view` is somewhat dangerous (hence the
         // `unsafe`!). This is creating a raw view into our module's
@@ -89,17 +119,26 @@ impl Renderer {
             .unwrap();
         context.bind_vertex_array(Some(&vao));
 
+        context.enable_vertex_attrib_array(self.position_attribute_location);
         context.vertex_attrib_pointer_with_i32(
-            position_attribute_location as u32,
+            self.position_attribute_location,
             2,
             WebGl2RenderingContext::FLOAT,
             false,
             0,
             0,
         );
-        context.enable_vertex_attrib_array(position_attribute_location as u32);
-
+        
+        let vao = context
+            .create_vertex_array()
+            .ok_or("Could not create vertex array object")
+            .unwrap();
         context.bind_vertex_array(Some(&vao));
+
+        context.enable_vertex_attrib_array(self.color_attribute_location);
+        context.vertex_attrib_pointer_with_i32(self.color_attribute_location, 4, WebGl2RenderingContext::FLOAT, true, 0, 0);
+        
+        
         
         //context.clear_color(0.0, 0.0, 0.0, 1.0);
         //context.clear(WebGl2RenderingContext::COLOR_BUFFER_BIT);

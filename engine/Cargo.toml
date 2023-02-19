@@ -2,6 +2,9 @@
 name = "canvas-test"
 version = "0.1.0"
 edition = "2021"
+description = "Engine for canvas-test"
+license = "MIT"
+repository = "https://github.com/jarmillemich/rust-canvas-test"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
