@@ -12,22 +12,27 @@ impl<'a> System<'a> for SysRenderer {
     );
 
     fn run(&mut self, (mut renderer, pos, col): Self::SystemData) {
+        // Arbitrarily chosen "center" for the moment
+        let cx = 400.;
+        let cy = 400.;
+        
+        renderer.draw_test(cx, cy, 6., [0., 0., 0., 1.]);
+        
         for (pos, col) in (&pos, &col).join() {
             let xx = pos.x;
             let yy = pos.y;
 
-            let dp = FixedPoint::from_num(8);
-
-            renderer.draw([
-                (xx + dp).to_num::<f32>() / 1024.0, (yy + dp).to_num::<f32>() / 1024.0,
-                (xx + dp).to_num::<f32>() / 1024.0, (yy - dp).to_num::<f32>() / 1024.0,
-                (xx - dp).to_num::<f32>() / 1024.0, (yy - dp).to_num::<f32>() / 1024.0,
-            ], [
-                col.r as f32,
-                col.g as f32,
-                col.b as f32,
-                col.a as f32,
-            ]);
+            renderer.draw_test(
+                xx.to_num::<f32>() + cx,
+                yy.to_num::<f32>() + cy,
+                16.,
+                [
+                    col.r as f32,
+                    col.g as f32,
+                    col.b as f32,
+                    col.a as f32,
+                ]
+            );
 
         }
     }

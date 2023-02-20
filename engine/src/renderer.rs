@@ -1,4 +1,4 @@
-use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlVertexArrayObject, WebGlBuffer, WebGlUniformLocation};
+use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlVertexArrayObject, WebGlBuffer, WebGlUniformLocation, console};
 use wasm_bindgen::prelude::*;
 
 
@@ -12,37 +12,14 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
     let vert_shader = compile_shader(
         &context,
         WebGl2RenderingContext::VERTEX_SHADER,
-        r##"#version 300 es
- 
-        in vec4 position;
-        uniform vec4 color;
-
-        out vec4 v_color;
-
-        void main() {
-        
-            gl_Position = position;
-            v_color = color;
-        }
-        "##,
-    ).unwrap();
+        include_str!("./shaders/circle_test.vert"),
+    ).expect("Vertex shader should compile");
 
     let frag_shader = compile_shader(
         &context,
         WebGl2RenderingContext::FRAGMENT_SHADER,
-        r##"#version 300 es
-    
-        precision highp float;
-        out vec4 outColor;
-        in vec4 v_color;
-        
-        void main() {
-
-            //outColor = vec4(1, 0.5, 0.0, 0.5);
-            outColor = v_color / 256.0;
-        }
-        "##,
-    ).unwrap();
+        include_str!("./shaders/circle_test.frag"),
+    ).expect("Fragment shader should compile");
 
     let program = link_program(&context, &vert_shader, &frag_shader).unwrap();
 
@@ -50,7 +27,14 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
 
     // Setup attributes
     let position_attribute_location = context.get_attrib_location(&program, "position") as u32;
-    let color_uniform_location = context.get_uniform_location(&program, "color").unwrap();
+    let color_uniform_location = get_uniform_location(&context, &program, "u_color");
+    let resolution_uniform_location = get_uniform_location(&context, &program, "u_resolution");
+    let center_uniform_location = get_uniform_location(&context, &program, "u_center");
+    let radius_uniform_location = get_uniform_location(&context, &program, "u_radius");
+
+    context.uniform2fv_with_f32_array(Some(&resolution_uniform_location), &[canvas.width() as f32, canvas.height() as f32]);
+
+    console::log_1(&format!("{}, {}", canvas.width(), canvas.height()).into());
 
     // Setup VAO
     let vao = context
@@ -72,6 +56,9 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
 
         position_attribute_location,
         color_uniform_location,
+        resolution_uniform_location,
+        center_uniform_location,
+        radius_uniform_location,
         vao,
     })
 }
@@ -85,6 +72,10 @@ fn attach_buffer(context: &WebGl2RenderingContext, location: u32, size: i32, fie
     buffer
 }
 
+fn get_uniform_location(context: &WebGl2RenderingContext, program: &WebGlProgram, name: &str) -> WebGlUniformLocation {
+    context.get_uniform_location(&program, name).expect(&("Should have ".to_owned() + name))
+}
+
 pub struct Renderer {
     context: WebGl2RenderingContext,
     program: WebGlProgram,
@@ -93,6 +84,9 @@ pub struct Renderer {
     position_attribute_location: u32,
     //color_attribute_location: u32,
     color_uniform_location: WebGlUniformLocation,
+    resolution_uniform_location: WebGlUniformLocation,
+    center_uniform_location: WebGlUniformLocation,
+    radius_uniform_location: WebGlUniformLocation,
     position_buffer: WebGlBuffer,
     //color_buffer: WebGlBuffer,
     vao: WebGlVertexArrayObject,
@@ -129,6 +123,7 @@ impl Renderer {
         context.uniform4fv_with_f32_array(Some(&self.color_uniform_location), &color);
 
         // Write to vertices
+        // We may need to re-select the position buffer here, but for the moment we only have the one
         write_to_buffer(context, &vertices);
 
         context.enable_vertex_attrib_array(self.position_attribute_location);
@@ -142,6 +137,45 @@ impl Renderer {
         );
     
         context.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
+    }
+
+    pub fn draw_test(&mut self, x: f32, y: f32, radius: f32, color: [f32; 4]) {
+        // Create our vertices
+        let d = 1.414 * radius;
+        let vertices = [
+            x - d, y - d,
+            x - d, y + d,
+            x + d, y - d,
+            x + d, y + d
+        ];
+        
+        let context = &self.context;
+
+        context.use_program(Some(&self.program));
+        context.bind_vertex_array(Some(&self.vao));
+
+        // Write to uniforms
+        // TODO update this uniform on canvas resizes
+        //context.uniform2fv_with_f32_array(Some(&self.resolution_uniform_location), &[context.canvas().unwrap().])
+        context.uniform4fv_with_f32_array(Some(&self.color_uniform_location), &color);
+        context.uniform2fv_with_f32_array(Some(&self.center_uniform_location), &[x, y]);
+        context.uniform1f(Some(&self.radius_uniform_location), radius);
+
+        // Write to vertices
+        // We may need to re-select the position buffer here, but for the moment we only have the one
+        write_to_buffer(context, &vertices);
+
+        context.enable_vertex_attrib_array(self.position_attribute_location);
+        context.vertex_attrib_pointer_with_i32(
+            self.position_attribute_location,
+            2,
+            WebGl2RenderingContext::FLOAT,
+            false,
+            0,
+            0,
+        );
+    
+        context.draw_arrays(WebGl2RenderingContext::TRIANGLE_STRIP, 0, 4);
     }
     
 }
