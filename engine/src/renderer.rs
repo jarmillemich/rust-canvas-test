@@ -1,6 +1,8 @@
-use web_sys::{WebGl2RenderingContext, WebGlProgram, WebGlShader, WebGlVertexArrayObject, WebGlBuffer, WebGlUniformLocation, console};
 use wasm_bindgen::prelude::*;
-
+use web_sys::{
+    console, WebGl2RenderingContext, WebGlBuffer, WebGlProgram, WebGlShader, WebGlUniformLocation,
+    WebGlVertexArrayObject,
+};
 
 pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
     let context = canvas
@@ -13,13 +15,15 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
         &context,
         WebGl2RenderingContext::VERTEX_SHADER,
         include_str!("./shaders/circle_test.vert"),
-    ).expect("Vertex shader should compile");
+    )
+    .expect("Vertex shader should compile");
 
     let frag_shader = compile_shader(
         &context,
         WebGl2RenderingContext::FRAGMENT_SHADER,
         include_str!("./shaders/circle_test.frag"),
-    ).expect("Fragment shader should compile");
+    )
+    .expect("Fragment shader should compile");
 
     let program = link_program(&context, &vert_shader, &frag_shader).unwrap();
 
@@ -27,7 +31,10 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
 
     // Enable alpha blending
     context.enable(WebGl2RenderingContext::BLEND);
-    context.blend_func(WebGl2RenderingContext::SRC_ALPHA, WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA);
+    context.blend_func(
+        WebGl2RenderingContext::SRC_ALPHA,
+        WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA,
+    );
 
     // Setup attributes
     let position_attribute_location = context.get_attrib_location(&program, "position") as u32;
@@ -36,7 +43,10 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
     let center_uniform_location = get_uniform_location(&context, &program, "u_center");
     let radius_uniform_location = get_uniform_location(&context, &program, "u_radius");
 
-    context.uniform2fv_with_f32_array(Some(&resolution_uniform_location), &[canvas.width() as f32, canvas.height() as f32]);
+    context.uniform2fv_with_f32_array(
+        Some(&resolution_uniform_location),
+        &[canvas.width() as f32, canvas.height() as f32],
+    );
 
     console::log_1(&format!("{}, {}", canvas.width(), canvas.height()).into());
 
@@ -48,16 +58,23 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
     context.bind_vertex_array(Some(&vao));
 
     // Attach buffers to VAO
-    let position_buffer = attach_buffer(&context, position_attribute_location, 2, WebGl2RenderingContext::FLOAT, false, 0, 0);
+    let position_buffer = attach_buffer(
+        &context,
+        position_attribute_location,
+        2,
+        WebGl2RenderingContext::FLOAT,
+        false,
+        0,
+        0,
+    );
     //let color_buffer = attach_buffer(&context, color_uniform_location, 4, WebGl2RenderingContext::FLOAT, true, 0, 0);
-    
+
     Some(Renderer {
         context,
         program,
 
         position_buffer,
-        //color_buffer, 
-
+        //color_buffer,
         position_attribute_location,
         color_uniform_location,
         resolution_uniform_location,
@@ -68,16 +85,33 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
 }
 
 /// Creates and attaches a buffer to the currently active VAO
-fn attach_buffer(context: &WebGl2RenderingContext, location: u32, size: i32, field_type: u32, normalized: bool, stride: i32, offset: i32) -> WebGlBuffer {
-    let buffer = context.create_buffer().ok_or("Failed to create buffer").unwrap();
+fn attach_buffer(
+    context: &WebGl2RenderingContext,
+    location: u32,
+    size: i32,
+    field_type: u32,
+    normalized: bool,
+    stride: i32,
+    offset: i32,
+) -> WebGlBuffer {
+    let buffer = context
+        .create_buffer()
+        .ok_or("Failed to create buffer")
+        .unwrap();
     context.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&buffer));
     context.enable_vertex_attrib_array(location);
     context.vertex_attrib_pointer_with_i32(location, size, field_type, normalized, stride, offset);
     buffer
 }
 
-fn get_uniform_location(context: &WebGl2RenderingContext, program: &WebGlProgram, name: &str) -> WebGlUniformLocation {
-    context.get_uniform_location(&program, name).expect(&("Should have ".to_owned() + name))
+fn get_uniform_location(
+    context: &WebGl2RenderingContext,
+    program: &WebGlProgram,
+    name: &str,
+) -> WebGlUniformLocation {
+    context
+        .get_uniform_location(program, name)
+        .expect(&("Should have ".to_owned() + name))
 }
 
 pub struct Renderer {
@@ -86,13 +120,11 @@ pub struct Renderer {
 
     // Shader attributes
     position_attribute_location: u32,
-    //color_attribute_location: u32,
     color_uniform_location: WebGlUniformLocation,
     resolution_uniform_location: WebGlUniformLocation,
     center_uniform_location: WebGlUniformLocation,
     radius_uniform_location: WebGlUniformLocation,
     position_buffer: WebGlBuffer,
-    //color_buffer: WebGlBuffer,
     vao: WebGlVertexArrayObject,
 }
 
@@ -106,7 +138,7 @@ fn write_to_buffer(context: &WebGl2RenderingContext, vertices: &[f32]) {
     // As a result, after `Float32Array::view` we have to be very careful not to
     // do any memory allocations before it's dropped.
     unsafe {
-        let positions_array_buf_view = js_sys::Float32Array::view(&vertices);
+        let positions_array_buf_view = js_sys::Float32Array::view(vertices);
 
         context.buffer_data_with_array_buffer_view(
             WebGl2RenderingContext::ARRAY_BUFFER,
@@ -139,20 +171,15 @@ impl Renderer {
             0,
             0,
         );
-    
+
         context.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
     }
 
     pub fn draw_test(&mut self, x: f32, y: f32, radius: f32, color: [f32; 4]) {
         // Create our vertices
         let d = 1.414 * radius;
-        let vertices = [
-            x - d, y - d,
-            x - d, y + d,
-            x + d, y - d,
-            x + d, y + d
-        ];
-        
+        let vertices = [x - d, y - d, x - d, y + d, x + d, y - d, x + d, y + d];
+
         let context = &self.context;
 
         context.use_program(Some(&self.program));
@@ -178,13 +205,10 @@ impl Renderer {
             0,
             0,
         );
-    
+
         context.draw_arrays(WebGl2RenderingContext::TRIANGLE_STRIP, 0, 4);
     }
-    
 }
-
-
 
 pub fn compile_shader(
     context: &WebGl2RenderingContext,

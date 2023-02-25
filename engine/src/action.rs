@@ -1,5 +1,5 @@
 use bitmask_enum::bitmask;
-use fixed::{FixedI64,types::extra::U12};
+use fixed::{types::extra::U12, FixedI64};
 
 pub type FixedPoint = FixedI64<U12>;
 
@@ -11,6 +11,7 @@ pub enum Direction {
     Right,
 }
 
+#[allow(unused)]
 pub enum Action {
     /// Indicate that we are moving in some combination of cardinal directions,
     /// or to stop moving if no flags are set
@@ -18,7 +19,6 @@ pub enum Action {
 
     /// Indicate the initiation of a jump
     Jump,
-
 
     /// Indicate the movement of the cursor
     Cursor { x: FixedPoint, y: FixedPoint },

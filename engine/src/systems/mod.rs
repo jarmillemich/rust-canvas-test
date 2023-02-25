@@ -1,8 +1,8 @@
-mod sysMovement;
-pub use sysMovement::SysMovement;
+mod sys_movement;
+pub use sys_movement::SysMovement;
 
-mod sysRenderer;
-pub use sysRenderer::SysRenderer;
+mod sys_renderer;
+pub use sys_renderer::SysRenderer;
 
-mod sysGravity;
-pub use sysGravity::SysGravity;
+mod sys_gravity;
+pub use sys_gravity::SysGravity;

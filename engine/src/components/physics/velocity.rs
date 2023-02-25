@@ -4,7 +4,7 @@ use crate::action::FixedPoint;
 
 pub struct Velocity {
     pub vx: FixedPoint,
-    pub vy: FixedPoint
+    pub vy: FixedPoint,
 }
 
 impl Velocity {

@@ -29,8 +29,16 @@
 			"glsl"
 		],
 		"cSpell.words": [
+			"bindgen",
+			"Deque",
 			"highp",
-			"smoothstep"
-		]
+			"mousemove",
+			"smoothstep",
+			"webgl"
+		],
+		"rust-analyzer.check.command": "clippy",
+		"[rust]": {
+			"editor.formatOnSave": true,
+		}
 	}
 }

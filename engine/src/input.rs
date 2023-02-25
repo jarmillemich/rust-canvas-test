@@ -1,8 +1,12 @@
-use std::{collections::VecDeque, sync::{Arc, Mutex}};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
-use wasm_bindgen::{prelude::*, convert::FromWasmAbi};
-use web_sys::{console, HtmlElement, HtmlCanvasElement};
+use wasm_bindgen::{convert::FromWasmAbi, prelude::*};
+use web_sys::HtmlCanvasElement;
 
+#[allow(unused)]
 pub enum InputEvent {
     // Keyboard
     KeyDown { key: char },
@@ -16,6 +20,7 @@ pub enum InputEvent {
 
 /// Structure to forward events from JS-land to Rust-land
 #[wasm_bindgen]
+#[derive(Default)]
 pub struct EventQueue {
     queue: Arc<Mutex<VecDeque<InputEvent>>>,
 }
@@ -24,25 +29,37 @@ pub struct EventQueue {
 impl EventQueue {
     pub fn new() -> Self {
         Self {
-            queue: Arc::new(Mutex::new(VecDeque::new()))
+            queue: Arc::new(Mutex::new(VecDeque::new())),
         }
     }
 
     pub fn attach(&self, el: &HtmlCanvasElement) {
         // TODO probably some great leaking going on here
         self.listen(el, "mousemove", |queue, event: web_sys::MouseEvent| {
-            queue.lock().unwrap().push_back(InputEvent::MouseMove { x: event.x(), y: event.y() });
+            queue.lock().unwrap().push_back(InputEvent::MouseMove {
+                x: event.x(),
+                y: event.y(),
+            });
             //console::log_1(&format!("Have {} events", queue.lock().unwrap().len()).into());
         });
     }
 
-    fn listen<T: FromWasmAbi + 'static, F: FnMut(&Arc<Mutex<VecDeque<InputEvent>>>, T) -> () + 'static>(&self, el: &HtmlCanvasElement, event: &str, mut cb: F) {
+    fn listen<
+        T: FromWasmAbi + 'static,
+        F: FnMut(&Arc<Mutex<VecDeque<InputEvent>>>, T) + 'static,
+    >(
+        &self,
+        el: &HtmlCanvasElement,
+        event: &str,
+        mut cb: F,
+    ) {
         let queue = self.queue.clone();
 
         let closure = Closure::<dyn FnMut(_)>::new(move |event: T| {
             cb(&queue, event);
         });
-        el.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref()).unwrap();
+        el.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref())
+            .unwrap();
         closure.forget();
     }
 }

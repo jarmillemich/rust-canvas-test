@@ -4,7 +4,7 @@ use crate::action::FixedPoint;
 
 pub struct Position {
     pub x: FixedPoint,
-    pub y: FixedPoint
+    pub y: FixedPoint,
 }
 
 impl Position {

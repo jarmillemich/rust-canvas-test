@@ -1,5 +1,5 @@
-use specs::prelude::*;
 use crate::components::physics::{Position, Velocity};
+use specs::prelude::*;
 extern crate web_sys;
 
 pub struct SysGravity;

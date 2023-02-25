@@ -1,19 +1,17 @@
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
-use specs::prelude::*;
-use specs::shrev::Event;
-use wasm_bindgen::JsCast;
-use wasm_bindgen::prelude::*;
 use crate::action::FixedPoint;
 use crate::components::graphics::Color;
 use crate::components::physics::{Gravity, Position, Velocity};
 use crate::input::EventQueue;
 use crate::renderer::init_renderer;
-use crate::systems::{self, SysMovement};
-
+use crate::systems;
+use specs::prelude::*;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
 
 #[wasm_bindgen]
 pub struct Engine {
@@ -44,7 +42,7 @@ impl Engine {
     pub fn new(canvas: &web_sys::HtmlCanvasElement) -> Self {
         Self {
             is_running: Arc::new(AtomicBool::new(false)),
-            world: Arc::new(Mutex::new(init_world(&canvas))),
+            world: Arc::new(Mutex::new(init_world(canvas))),
             //event_queue: Arc::new(Mutex::new(EventQueue::new()))
             event_queue: EventQueue::new(),
             //dispatcher: Arc::new(init_dispatcher())
@@ -79,7 +77,6 @@ impl Engine {
 // The JavaScript interface
 #[wasm_bindgen]
 impl Engine {
-    
     pub fn start(&mut self) {
         let was_running = self.is_running.fetch_or(true, Ordering::Relaxed);
         if !was_running {
@@ -101,17 +98,22 @@ fn init_world(canvas: &web_sys::HtmlCanvasElement) -> World {
 
     // Testing entity
     for x in 0..8 {
-        let ent = world.create_entity()
-            .with(Position::new(FixedPoint::from_num(-32 * x), FixedPoint::from_num(-8)))
-            .with(Velocity::new(FixedPoint::from_num(1), FixedPoint::from_num(-0.2 * x as f32)))
+        world
+            .create_entity()
+            .with(Position::new(
+                FixedPoint::from_num(-32 * x),
+                FixedPoint::from_num(-8),
+            ))
+            .with(Velocity::new(
+                FixedPoint::from_num(1),
+                FixedPoint::from_num(-0.2 * x as f32),
+            ))
             .with(Color::new(20 * x as u8, 255 - 16 * x as u8, 0, 255))
             .with(Gravity)
             .build();
     }
 
-    
-
-    world.insert(init_renderer(&canvas).unwrap());
+    world.insert(init_renderer(canvas).unwrap());
 
     world
 }
@@ -122,10 +124,4 @@ fn init_dispatcher() -> Dispatcher<'static, 'static> {
         .with(systems::SysGravity, "Gravity", &[])
         .with(systems::SysRenderer, "Renderer", &[])
         .build()
-}
-
-fn init_systems() -> Vec<Box<dyn RunNow<'static>>> {
-    vec![
-        box SysMovement
-    ]
 }
