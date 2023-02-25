@@ -24,6 +24,13 @@
 			"**/target": true,
 			"**/pkg": true,
 			"**/dist": true,
-		}
+		},
+		"cSpell.enableFiletypes": [
+			"glsl"
+		],
+		"cSpell.words": [
+			"highp",
+			"smoothstep"
+		]
 	}
 }

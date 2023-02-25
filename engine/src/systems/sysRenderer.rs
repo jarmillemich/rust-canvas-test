@@ -16,7 +16,7 @@ impl<'a> System<'a> for SysRenderer {
         let cx = 400.;
         let cy = 400.;
         
-        renderer.draw_test(cx, cy, 6., [0., 0., 0., 1.]);
+        renderer.draw_test(cx, cy, 6., [0., 0., 0., 255.]);
         
         for (pos, col) in (&pos, &col).join() {
             let xx = pos.x;

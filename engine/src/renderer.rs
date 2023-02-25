@@ -25,6 +25,10 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
 
     context.use_program(Some(&program));
 
+    // Enable alpha blending
+    context.enable(WebGl2RenderingContext::BLEND);
+    context.blend_func(WebGl2RenderingContext::SRC_ALPHA, WebGl2RenderingContext::ONE_MINUS_SRC_ALPHA);
+
     // Setup attributes
     let position_attribute_location = context.get_attrib_location(&program, "position") as u32;
     let color_uniform_location = get_uniform_location(&context, &program, "u_color");
