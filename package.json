@@ -10,6 +10,7 @@
     "serve": "vite",
     "build": "run-p type-check build-only",
     "build-only": "vite build",
+    "build:pages": "run-p type-check \"build-only -- --base=/rust-canvas-test/\"",
     "type-check": "vue-tsc --noEmit"
   },
   "keywords": [],
