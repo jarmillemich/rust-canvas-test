@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build:engine": "cd engine && wasm-pack build --debug",
+    "build:engine": "cd engine && wasm-pack build",
+    "build:engine:debug": "cd engine && wasm-pack build --debug",
     "serve": "vite",
     "build": "run-p type-check build-only",
     "build-only": "vite build",
