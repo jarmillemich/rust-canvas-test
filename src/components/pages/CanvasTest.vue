@@ -5,8 +5,7 @@
 </template>
 
 <script lang="ts" setup>
-import { useListener } from '@/usables/useListener';
-import { Engine, EventQueue, init } from '@engine/canvas_test';
+import { Engine, init } from '@engine/canvas_test';
 import { onMounted, onUnmounted, ref } from 'vue';
 
 let canvas = ref<HTMLCanvasElement>();

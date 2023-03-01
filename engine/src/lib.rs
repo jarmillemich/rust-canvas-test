@@ -1,8 +1,5 @@
 #![feature(box_syntax)]
 
-// This might be a fun exercise for later. For now using the fixed crate
-// mod fixedPoint;
-
 mod components;
 mod resources;
 mod systems;
