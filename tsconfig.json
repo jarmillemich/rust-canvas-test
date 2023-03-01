@@ -6,7 +6,8 @@
     "paths": {
       "@/*": ["./src/*"],
       "@engine/*": ["./engine/pkg/*"],
-    }
+    },
+    "target": "ESNext"
   },
 
   "references": [

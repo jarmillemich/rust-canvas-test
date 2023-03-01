@@ -15,5 +15,8 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@engine': fileURLToPath(new URL('./engine/pkg', import.meta.url)),
     }
+  },
+  build: {
+    target: 'esnext'
   }
 })

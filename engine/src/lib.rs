@@ -4,6 +4,7 @@
 // mod fixedPoint;
 
 mod components;
+mod resources;
 mod systems;
 mod utils;
 
