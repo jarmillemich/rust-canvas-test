@@ -1,6 +1,6 @@
 [package]
 name = "canvas-test"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 description = "Engine for canvas-test"
 license = "MIT"
@@ -20,13 +20,8 @@ wasm-bindgen = "0.2.74"
 # all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.6", optional = true }
-
-# `wee_alloc` is a tiny allocator for wasm that is only ~1K in code size
-# compared to the default allocator's ~10K. It is slower than the default
-# allocator, however.
-wee_alloc = { version = "0.4.5", optional = true }
 js-sys = "0.3.61"
-specs = { version = "0.18.0", default-features = false }
+specs = { git = "https://github.com/amethyst/specs", rev="81073f3", default-features = false }
 bitmask-enum = "2.1.0"
 fixed = "1.23.0"
 
