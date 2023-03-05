@@ -3,11 +3,11 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::action::FixedPoint;
-use crate::components::graphics::Color;
-use crate::components::physics::{Gravity, Position, Velocity};
+use crate::components::graphics::{Color, DrawCircle};
+use crate::components::physics::{Gravity, GravityEmitter, MovementReceiver, Position, Velocity};
 use crate::input::EventQueue;
 use crate::renderer::init_renderer;
+use crate::resources::TickCoordinator;
 use crate::systems;
 use specs::prelude::*;
 use wasm_bindgen::prelude::*;
@@ -17,15 +17,10 @@ use wasm_bindgen::JsCast;
 pub struct Engine {
     is_running: Arc<AtomicBool>,
     world: Arc<Mutex<World>>,
-    //event_queue: Arc<Mutex<EventQueue>>,
-    event_queue: EventQueue,
-    //dispatcher: Arc<Dispatcher<'static, 'static>>,
 }
 
 pub fn init_engine(canvas: web_sys::HtmlCanvasElement) -> Engine {
-    let engine = Engine::new(&canvas);
-    engine.event_queue.attach(&canvas);
-    engine
+    Engine::new(&canvas)
 }
 
 fn window() -> web_sys::Window {
@@ -44,7 +39,7 @@ impl Engine {
             is_running: Arc::new(AtomicBool::new(false)),
             world: Arc::new(Mutex::new(init_world(canvas))),
             //event_queue: Arc::new(Mutex::new(EventQueue::new()))
-            event_queue: EventQueue::new(),
+            //event_queue: EventQueue::new(),
             //dispatcher: Arc::new(init_dispatcher())
         }
     }
@@ -95,33 +90,51 @@ fn init_world(canvas: &web_sys::HtmlCanvasElement) -> World {
     world.register::<Velocity>();
     world.register::<Gravity>();
     world.register::<Color>();
+    world.register::<DrawCircle>();
+    world.register::<GravityEmitter>();
+    world.register::<MovementReceiver>();
 
-    // Testing entity
+    // Some test entities that are affected by gravity
     for x in 0..8 {
         world
             .create_entity()
-            .with(Position::new(
-                FixedPoint::from_num(-32 * x),
-                FixedPoint::from_num(-8),
-            ))
-            .with(Velocity::new(
-                FixedPoint::from_num(1),
-                FixedPoint::from_num(-0.2 * x as f32),
-            ))
+            .with(Position::new_f32(-32. * x as f32, -8.))
+            .with(Velocity::new_f32(1., -0.2 * x as f32))
             .with(Color::new(20 * x as u8, 255 - 16 * x as u8, 0, 255))
+            .with(DrawCircle::new(16.))
             .with(Gravity)
             .build();
     }
 
+    // A movable gravity emitter
+    world
+        .create_entity()
+        .with(Position::new_f32(0., 0.))
+        .with(Velocity::new_f32(0., 0.))
+        .with(GravityEmitter::new())
+        .with(MovementReceiver::new())
+        .with(Color::new(0, 0, 0, 255))
+        .with(DrawCircle::new(8.))
+        .build();
+
+    // Add resources
     world.insert(init_renderer(canvas).unwrap());
+    let event_queue = EventQueue::new();
+    event_queue.attach(canvas);
+    world.insert(event_queue);
+    world.insert(TickCoordinator::new());
 
     world
 }
 
 fn init_dispatcher() -> Dispatcher<'static, 'static> {
     DispatcherBuilder::new()
-        .with(systems::SysMovement, "Movement", &[])
+        // Register systems
+        .with(systems::SysInput, "Input", &[])
+        .with(systems::SysMovementReceiver, "MovementReceiver", &[])
+        .with(systems::SysMovement, "Movement", &["MovementReceiver"])
         .with(systems::SysGravity, "Gravity", &[])
         .with(systems::SysRenderer, "Renderer", &[])
+        .with(systems::SysTickCoordinator, "TickCoordinator", &[])
         .build()
 }

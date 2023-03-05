@@ -7,5 +7,7 @@ pub struct SysTickCoordinator;
 impl<'a> System<'a> for SysTickCoordinator {
     type SystemData = (WriteExpect<'a, TickCoordinator>,);
 
-    fn run(&mut self, (mut tc): Self::SystemData) {}
+    fn run(&mut self, mut tc: Self::SystemData) {
+        tc.0.advance();
+    }
 }

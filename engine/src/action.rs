@@ -4,6 +4,7 @@ use fixed::{types::extra::U12, FixedI64};
 pub type FixedPoint = FixedI64<U12>;
 
 #[bitmask(u8)]
+#[derive(Default)]
 pub enum Direction {
     Up,
     Down,
@@ -12,10 +13,13 @@ pub enum Direction {
 }
 
 #[allow(unused)]
+#[derive(PartialEq)]
 pub enum Action {
-    /// Indicate that we are moving in some combination of cardinal directions,
-    /// or to stop moving if no flags are set
-    SetMoving { dir: Direction },
+    /// Indicate that we are moving in some cardinal direction
+    StartMoving { dir: Direction },
+
+    /// Indicate that we are no longer moving in some cardinal direction
+    StopMoving { dir: Direction },
 
     /// Indicate the initiation of a jump
     Jump,

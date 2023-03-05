@@ -12,3 +12,6 @@ pub use sys_input::SysInput;
 
 mod sys_tick_coordination;
 pub use sys_tick_coordination::SysTickCoordinator;
+
+mod sys_movement_receive;
+pub use sys_movement_receive::SysMovementReceiver;

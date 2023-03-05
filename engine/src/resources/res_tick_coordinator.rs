@@ -22,13 +22,15 @@ impl TickCoordinator {
 
         Self {
             current_tick: 0,
-            max_tick: 0,
+            // Testing
+            //max_tick: 0,
+            max_tick: 1 << 30,
             action_queue: [EMPTY_VEC; ACTION_QUEUE_SLOTS],
         }
     }
 
     /// Retrieves the queue slot for the specified tick
-    fn queue_slot_at<'a>(&'a mut self, tick: usize) -> &'a mut Vec<Action> {
+    fn queue_slot_at(&mut self, tick: usize) -> &mut Vec<Action> {
         assert!(
             tick >= self.current_tick,
             "Attempted to retrieve action queue from the past tick {tick}, currently at {}",
@@ -44,8 +46,13 @@ impl TickCoordinator {
         &mut self.action_queue[tick % ACTION_QUEUE_SLOTS]
     }
 
-    /// Retrieves the queue slot for the current tick
-    fn current_queue_slot<'a>(&'a mut self) -> &'a mut Vec<Action> {
+    /// Retrieves the queue slot for the current tick, shared
+    pub fn current_tick_actions(&self) -> &Vec<Action> {
+        &self.action_queue[self.current_tick % ACTION_QUEUE_SLOTS]
+    }
+
+    /// Retrieves the queue slot for the current tick, exclusively
+    fn current_queue_slot(&mut self) -> &mut Vec<Action> {
         self.queue_slot_at(self.current_tick)
     }
 
