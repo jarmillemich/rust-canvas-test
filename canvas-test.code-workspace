@@ -32,6 +32,8 @@
 			"bindgen",
 			"Deque",
 			"highp",
+			"keydown",
+			"keyup",
 			"mousemove",
 			"smoothstep",
 			"webgl"

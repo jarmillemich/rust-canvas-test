@@ -1,15 +1,20 @@
 use specs::prelude::*;
 
 pub struct Color {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-    pub a: u8,
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+    pub alpha: u8,
 }
 
 impl Color {
-    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self { r, g, b, a }
+    pub fn new(red: u8, green: u8, blue: u8, alpha: u8) -> Self {
+        Self {
+            red,
+            green,
+            blue,
+            alpha,
+        }
     }
 }
 

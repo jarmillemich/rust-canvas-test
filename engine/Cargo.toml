@@ -43,5 +43,6 @@ features = [
   'WebGlUniformLocation',
   'Window',
   'console',
-  'MouseEvent'
+  'MouseEvent',
+  'KeyboardEvent'
 ]

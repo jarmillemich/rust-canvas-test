@@ -4,13 +4,13 @@ use std::{
 };
 
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*};
-use web_sys::HtmlCanvasElement;
+use web_sys::{EventTarget, HtmlCanvasElement};
 
 #[allow(unused)]
 pub enum InputEvent {
     // Keyboard
-    KeyDown { key: char },
-    KeyUp { key: char },
+    KeyDown { key: String },
+    KeyUp { key: String },
 
     // Mouse
     MouseMove { x: i32, y: i32 },
@@ -35,13 +35,34 @@ impl EventQueue {
 
     pub fn attach(&self, el: &HtmlCanvasElement) {
         // TODO probably some great leaking going on here
-        self.listen(el, "mousemove", |queue, event: web_sys::MouseEvent| {
-            queue.lock().unwrap().push_back(InputEvent::MouseMove {
-                x: event.x(),
-                y: event.y(),
-            });
-            //console::log_1(&format!("Have {} events", queue.lock().unwrap().len()).into());
-        });
+        // self.listen(el, "mousemove", |queue, event: web_sys::MouseEvent| {
+        //     queue.lock().unwrap().push_back(InputEvent::MouseMove {
+        //         x: event.x(),
+        //         y: event.y(),
+        //     });
+        // });
+
+        self.listen(
+            &el.owner_document().unwrap(),
+            "keydown",
+            |queue, event: web_sys::KeyboardEvent| {
+                queue
+                    .lock()
+                    .unwrap()
+                    .push_back(InputEvent::KeyDown { key: event.key() });
+            },
+        );
+
+        self.listen(
+            &el.owner_document().unwrap(),
+            "keyup",
+            |queue, event: web_sys::KeyboardEvent| {
+                queue
+                    .lock()
+                    .unwrap()
+                    .push_back(InputEvent::KeyUp { key: event.key() });
+            },
+        );
     }
 
     fn listen<
@@ -49,7 +70,7 @@ impl EventQueue {
         F: FnMut(&Arc<Mutex<VecDeque<InputEvent>>>, T) + 'static,
     >(
         &self,
-        el: &HtmlCanvasElement,
+        el: &EventTarget,
         event: &str,
         mut cb: F,
     ) {
@@ -61,5 +82,11 @@ impl EventQueue {
         el.add_event_listener_with_callback(event, closure.as_ref().unchecked_ref())
             .unwrap();
         closure.forget();
+    }
+}
+
+impl EventQueue {
+    pub fn items(&self) -> &Arc<Mutex<VecDeque<InputEvent>>> {
+        &self.queue
     }
 }
