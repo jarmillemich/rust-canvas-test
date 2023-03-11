@@ -30,6 +30,7 @@
 		],
 		"cSpell.words": [
 			"bindgen",
+			"consts",
 			"Deque",
 			"highp",
 			"keydown",

@@ -99,7 +99,7 @@ fn init_world(canvas: &web_sys::HtmlCanvasElement) -> World {
         world
             .create_entity()
             .with(Position::new_f32(-32. * x as f32, -8.))
-            .with(Velocity::new_f32(1., -0.2 * x as f32))
+            .with(Velocity::new_f32(1., -1.))
             .with(Color::new(20 * x as u8, 255 - 16 * x as u8, 0, 255))
             .with(DrawCircle::new(16.))
             .with(Gravity)
@@ -132,6 +132,7 @@ fn init_dispatcher() -> Dispatcher<'static, 'static> {
         // Register systems
         .with(systems::SysInput, "Input", &[])
         .with(systems::SysMovementReceiver, "MovementReceiver", &[])
+        .with(systems::SysFireReceiver, "FireReceiver", &[])
         .with(systems::SysMovement, "Movement", &["MovementReceiver"])
         .with(systems::SysGravity, "Gravity", &[])
         .with(systems::SysRenderer, "Renderer", &[])

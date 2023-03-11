@@ -24,8 +24,8 @@ impl Component for MovementReceiver {
 
 impl MovementReceiver {
     pub fn apply(&self, vel: &mut Velocity) {
-        let negative: FixedPoint = FixedPoint::from_num(-1.);
-        let positive: FixedPoint = FixedPoint::from_num(1.);
+        let negative: FixedPoint = FixedPoint::from_num(-5.);
+        let positive: FixedPoint = FixedPoint::from_num(5.);
         let zero: FixedPoint = FixedPoint::from_num(0.);
 
         if self.direction.contains(Direction::Left) {
