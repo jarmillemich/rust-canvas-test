@@ -1,4 +1,7 @@
-use crate::components::physics::{Gravity, GravityEmitter, Position, Velocity};
+use crate::{
+    action::FixedPoint,
+    components::physics::{Gravity, GravityEmitter, Position, Velocity},
+};
 use specs::prelude::*;
 extern crate web_sys;
 
@@ -18,10 +21,17 @@ impl<'a> System<'a> for SysGravity {
                 let dx = pos.x - gravity_position.x;
                 let dy = pos.y - gravity_position.y;
 
+                assert!(
+                    dx != 0 || dy != 0,
+                    "Two gravity entities in the same location"
+                );
+
                 let d = dx * dx + dy * dy;
 
-                vel.vx -= dx / d;
-                vel.vy -= dy / d;
+                let g = FixedPoint::from_num(2);
+
+                vel.vx -= g * dx / d;
+                vel.vy -= g * dy / d;
             }
         }
     }

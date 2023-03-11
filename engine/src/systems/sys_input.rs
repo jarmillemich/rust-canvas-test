@@ -26,6 +26,7 @@ impl<'a> System<'a> for SysInput {
                     "d" => Action::StartMoving {
                         dir: Direction::Right,
                     },
+                    " " => Action::Fire,
                     _ => continue,
                 },
 

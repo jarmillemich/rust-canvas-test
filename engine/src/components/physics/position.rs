@@ -2,6 +2,7 @@ use specs::prelude::*;
 
 use crate::action::FixedPoint;
 
+#[derive(Clone)]
 pub struct Position {
     pub x: FixedPoint,
     pub y: FixedPoint,

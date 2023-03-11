@@ -15,3 +15,6 @@ pub use sys_tick_coordination::SysTickCoordinator;
 
 mod sys_movement_receive;
 pub use sys_movement_receive::SysMovementReceiver;
+
+mod sys_fire_receive;
+pub use sys_fire_receive::SysFireReceiver;
