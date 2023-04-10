@@ -1,2 +1,3 @@
-mod res_tick_coordinator;
-pub use res_tick_coordinator::TickCoordinator;
+pub mod tick_coordination;
+
+pub use tick_coordination::res_tick_coordinator::TickCoordinator;

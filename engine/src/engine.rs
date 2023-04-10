@@ -1,17 +1,26 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+};
 
-use crate::components::graphics::{Color, DrawCircle};
-use crate::components::physics::{Gravity, GravityEmitter, MovementReceiver, Position, Velocity};
-use crate::input::EventQueue;
-use crate::renderer::init_renderer;
-use crate::resources::TickCoordinator;
-use crate::systems;
+use crate::{
+    components::{
+        graphics::{Color, DrawCircle},
+        physics::{Gravity, GravityEmitter, MovementReceiver, Position, Velocity},
+    },
+    input::EventQueue,
+    renderer::init_renderer,
+    resources::tick_coordination::{
+        connection_loopback::ConnectionLoopback, res_tick_coordinator::TickCoordinator,
+    },
+    systems,
+};
 use specs::prelude::*;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
+use wasm_bindgen::{prelude::*, JsCast};
 
 #[wasm_bindgen]
 pub struct Engine {
@@ -122,7 +131,7 @@ fn init_world(canvas: &web_sys::HtmlCanvasElement) -> World {
     let event_queue = EventQueue::new();
     event_queue.attach(canvas);
     world.insert(event_queue);
-    world.insert(TickCoordinator::new());
+    world.insert(TickCoordinator::new(box ConnectionLoopback::new()));
 
     world
 }

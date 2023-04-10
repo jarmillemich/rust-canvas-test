@@ -30,12 +30,18 @@
 		],
 		"cSpell.words": [
 			"bindgen",
+			"bitmask",
 			"consts",
 			"Deque",
+			"endregion",
+			"Flexbuffer",
+			"flexbuffers",
 			"highp",
 			"keydown",
 			"keyup",
 			"mousemove",
+			"oneshot",
+			"onicecandidate",
 			"smoothstep",
 			"webgl"
 		],

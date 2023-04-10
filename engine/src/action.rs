@@ -1,10 +1,10 @@
 use bitmask_enum::bitmask;
-use fixed::{types::extra::U12, FixedI64};
+use serde_derive::{Deserialize, Serialize};
 
-pub type FixedPoint = FixedI64<U12>;
+use crate::fixed_point::FixedPoint;
 
 #[bitmask(u8)]
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
 pub enum Direction {
     Up,
     Down,
@@ -13,7 +13,7 @@ pub enum Direction {
 }
 
 #[allow(unused)]
-#[derive(PartialEq)]
+#[derive(PartialEq, Serialize, Deserialize)]
 pub enum Action {
     /// Indicate that we are moving in some cardinal direction
     StartMoving { dir: Direction },
@@ -25,7 +25,12 @@ pub enum Action {
     Jump,
 
     /// Indicate the movement of the cursor
-    Cursor { x: FixedPoint, y: FixedPoint },
+    Cursor {
+        #[serde(with = "crate::fixed_point")]
+        x: FixedPoint,
+        #[serde(with = "crate::fixed_point")]
+        y: FixedPoint,
+    },
 
     /// Indicate firing a weapon/ability
     Fire,

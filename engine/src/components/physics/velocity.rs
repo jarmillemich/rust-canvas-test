@@ -1,6 +1,6 @@
 use specs::prelude::*;
 
-use crate::action::FixedPoint;
+use crate::fixed_point::FixedPoint;
 
 pub struct Velocity {
     pub vx: FixedPoint,

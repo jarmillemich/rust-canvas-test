@@ -1,6 +1,6 @@
 use crate::{
-    action::FixedPoint,
     components::physics::{Gravity, GravityEmitter, Position, Velocity},
+    fixed_point::FixedPoint,
 };
 use specs::prelude::*;
 extern crate web_sys;

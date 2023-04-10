@@ -1,9 +1,6 @@
-use specs::prelude::*;
-use web_sys::console;
-
-use crate::action::{Direction, FixedPoint};
-
 use super::Velocity;
+use crate::{action::Direction, fixed_point::FixedPoint};
+use specs::prelude::*;
 
 /// TODO Testing receiving actions to a VelocityComponent
 pub struct MovementReceiver {

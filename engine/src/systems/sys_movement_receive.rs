@@ -4,7 +4,6 @@ use crate::{
     resources::TickCoordinator,
 };
 use specs::prelude::*;
-use web_sys::console;
 
 pub struct SysMovementReceiver;
 

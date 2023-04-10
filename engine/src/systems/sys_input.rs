@@ -47,9 +47,8 @@ impl<'a> System<'a> for SysInput {
                 _ => continue,
             };
 
-            // For testing purposes, we'll just schedule everything 5 ticks in the future
-            let tick = tc.current_tick + 5;
-            tc.enqueue_action(action, tick);
+            // Request that the action be scheduled
+            tc.add_action(action);
         }
     }
 }

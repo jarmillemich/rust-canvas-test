@@ -1,13 +1,17 @@
 #![feature(box_syntax)]
 
+// Types
+mod action;
+mod fixed_point;
+mod input;
+
+// ECS
 mod components;
 mod resources;
 mod systems;
 mod utils;
 
-mod action;
-mod input;
-
+// Web
 use wasm_bindgen::prelude::*;
 mod engine;
 mod renderer;

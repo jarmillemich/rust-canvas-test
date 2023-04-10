@@ -8,6 +8,6 @@ impl<'a> System<'a> for SysTickCoordinator {
     type SystemData = (WriteExpect<'a, TickCoordinator>,);
 
     fn run(&mut self, mut tc: Self::SystemData) {
-        tc.0.advance();
+        tc.0.on_tick_end();
     }
 }
