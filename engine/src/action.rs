@@ -13,7 +13,7 @@ pub enum Direction {
 }
 
 #[allow(unused)]
-#[derive(PartialEq, Serialize, Deserialize)]
+#[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub enum Action {
     /// Indicate that we are moving in some cardinal direction
     StartMoving { dir: Direction },

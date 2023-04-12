@@ -1,5 +1,7 @@
 use crate::action::Action;
 
+use super::types::NetworkMessage;
+
 const ACTION_QUEUE_SLOTS: usize = 128;
 
 enum QueueSlotState {
@@ -35,6 +37,9 @@ pub struct TickQueue {
     /// The current simulation tick
     pub current_tick: usize,
 
+    /// The last tick that is finalized (has no non-finalized ticks before it)
+    last_finalized_tick: usize,
+
     /// The queue of upcoming actions
     action_queue: [QueueSlot; ACTION_QUEUE_SLOTS],
 }
@@ -48,6 +53,7 @@ impl TickQueue {
 
         Self {
             current_tick: 0,
+            last_finalized_tick: 0,
             action_queue: [EMPTY_SLOT; ACTION_QUEUE_SLOTS],
         }
     }
@@ -91,6 +97,11 @@ impl TickQueue {
         &self.action_queue[self.current_tick % ACTION_QUEUE_SLOTS].actions
     }
 
+    /// Retrieves the queue slot for the latest finalized tick, shared
+    pub fn last_finalized_tick_actions(&self) -> &Vec<Action> {
+        &self.peek_queue_slot_at(self.last_finalized_tick).actions
+    }
+
     /// Retrieves the queue slot for the current tick, exclusively
     fn current_queue_slot(&mut self) -> &mut QueueSlot {
         self.queue_slot_at(self.current_tick)
@@ -117,6 +128,11 @@ impl TickQueue {
         );
 
         slot.state = QueueSlotState::Finalized;
+
+        // Move up our last finalized tick counter
+        while self.peek_queue_slot_at(self.last_finalized_tick).is_finalized() {
+            self.last_finalized_tick += 1;
+        }
     }
 
     pub fn finalize_tick_with_actions(&mut self, tick: usize, mut actions: Vec<Action>) {
@@ -130,7 +146,8 @@ impl TickQueue {
         );
 
         slot.actions.append(&mut actions);
-        slot.state = QueueSlotState::Finalized;
+        
+        self.finalize_tick(tick);
     }
 
     pub fn advance(&mut self) {
@@ -152,4 +169,115 @@ impl TickQueue {
         self.peek_queue_slot_at(self.current_tick + 1)
             .is_finalized()
     }
+
+    pub fn next_unfinalized_tick(&self) -> usize {
+        assert!(
+            !self
+                .peek_queue_slot_at(self.last_finalized_tick + 1)
+                .is_finalized(),
+            "Tick slot after last finalized should not be finalized"
+        );
+
+        self.last_finalized_tick + 1
+    }
+
+    pub fn make_tick_finalization_messages(&self, from_tick: usize) -> (usize, Vec<NetworkMessage>) {
+        let mut messages = Vec::new();
+
+        for tick in from_tick..=self.last_finalized_tick {
+            let slot = self.peek_queue_slot_at(tick);
+
+            if slot.is_finalized() {
+                messages.push(NetworkMessage::FinalizedTick {
+                    tick,
+                    actions: slot.actions.clone(),
+                });
+            }
+        }
+
+        (self.last_finalized_tick, messages)
+    }
+}
+
+#[test]
+fn basic_test() {
+    use crate::action::Direction;
+
+    let mut queue = TickQueue::new();
+
+    assert_eq!(queue.current_tick, 0, "Tick queue should start at tick 0");
+
+    assert_eq!(
+        queue.current_tick_actions().len(),
+        0,
+        "Tick queue should start with no actions"
+    );
+
+    // Queue up an action in the next tick
+    queue.finalize_tick_with_actions(1, vec![Action::Jump]);
+
+    // Queue up a couple actions in the subsequent tick
+    queue.finalize_tick_with_actions(
+        2,
+        vec![
+            Action::Fire,
+            Action::StartMoving {
+                dir: Direction::Right,
+            },
+        ],
+    );
+
+    // And finalize one last empty tick
+    queue.finalize_tick(3);
+
+    // Advance and check that the action is available
+    queue.advance();
+    let current_actions = queue.current_tick_actions();
+
+    assert_eq!(
+        current_actions.len(),
+        1,
+        "Tick queue should have 1 action after advancing to tick 1"
+    );
+
+    assert_eq!(
+        current_actions[0],
+        Action::Jump,
+        "Tick queue should have a jump action after advancing to tick 1"
+    );
+
+    // Advance to the next tick
+    // TODO actions are technically not necessarily ordered
+    queue.advance();
+    let current_actions = queue.current_tick_actions();
+
+    assert_eq!(
+        current_actions.len(),
+        2,
+        "Tick queue should have 2 actions after advancing to tick 2"
+    );
+
+    assert_eq!(
+        current_actions[0],
+        Action::Fire,
+        "Tick queue should have a fire action after advancing to tick 2"
+    );
+
+    assert_eq!(
+        current_actions[1],
+        Action::StartMoving {
+            dir: Direction::Right
+        },
+        "Tick queue should have a start moving action after advancing to tick 2"
+    );
+
+    // Advance to the next tick (should be empty)
+    queue.advance();
+    let current_actions = queue.current_tick_actions();
+
+    assert_eq!(
+        current_actions.len(),
+        0,
+        "Tick queue should have no actions after advancing to tick 3"
+    );
 }

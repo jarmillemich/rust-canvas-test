@@ -7,9 +7,13 @@ use std::sync::Mutex;
 use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{RtcDataChannel, RtcPeerConnection};
 
-use crate::{action::Action};
+use crate::action::Action;
 
-use super::{action_coordinator::ActionScheduler, types::NetworkMessage, tick_queue::{TickQueue, self}};
+use super::{
+    action_coordinator::ActionScheduler,
+    tick_queue::{self, TickQueue},
+    types::NetworkMessage,
+};
 
 /// On the client side, a connection to the host
 pub struct ConnectionToHost {
@@ -20,10 +24,7 @@ pub struct ConnectionToHost {
 }
 
 impl ConnectionToHost {
-    pub fn new(
-        connection: RtcPeerConnection,
-        channel: RtcDataChannel,
-    ) -> Self {
+    pub fn new(connection: RtcPeerConnection, channel: RtcDataChannel) -> Self {
         let message_queue = Self::attach_message_queue(&channel);
 
         Self {
@@ -52,7 +53,6 @@ impl ConnectionToHost {
 }
 
 impl ActionScheduler for ConnectionToHost {
-
     fn add_action(&mut self, queue: &mut TickQueue, action: Action) {
         self.action_buffer.push(action);
     }
@@ -80,6 +80,8 @@ impl ActionScheduler for ConnectionToHost {
                     NetworkMessage::FinalizedTick { tick, actions } => {
                         queue.finalize_tick_with_actions(tick, actions);
                     }
+
+                    _ => panic!("Unexpected message from host"),
                 }
             }
         }
