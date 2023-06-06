@@ -1,7 +1,9 @@
 <template>
   <header class="flex-auto">
     <nav class="d-flex">
-      <router-link to="/">The Test</router-link>
+      <router-link to="/">Local</router-link>
+      <router-link to="/host">Host</router-link>
+      <router-link to="/join">Join</router-link>
     </nav>
   </header>
 
@@ -26,7 +28,6 @@ header nav {
   &>* {
     display: block;
     padding: 0.75rem 0.75rem;
-    margin-right: auto;
 
     &:hover {
       background: #48f;
@@ -34,6 +35,10 @@ header nav {
 
     &:not(:last-child) {
       border-right: 1px solid white;
+    }
+
+    &.router-link-exact-active {
+      background: #48f;
     }
 
     

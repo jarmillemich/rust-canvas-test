@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "engine"
+		},
+		{
+			"path": "engine/src/resources/tick_coordination"
 		}
 	],
 	"settings": {
@@ -42,12 +45,18 @@
 			"mousemove",
 			"oneshot",
 			"onicecandidate",
+			"saveload",
 			"smoothstep",
+			"unfinalized",
 			"webgl"
 		],
 		"rust-analyzer.check.command": "clippy",
 		"[rust]": {
 			"editor.formatOnSave": true,
-		}
+		},
+		"[vue]": {
+			"editor.indentSize": 2,
+			"editor.detectIndentation": false,
+		},
 	}
 }

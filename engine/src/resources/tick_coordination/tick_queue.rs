@@ -51,10 +51,14 @@ impl TickQueue {
             actions: Vec::new(),
         };
 
+        let mut action_queue = [EMPTY_SLOT; ACTION_QUEUE_SLOTS];
+        // Mark the zeroth tick as always finalized to get us started
+        action_queue[0].state = QueueSlotState::Finalized;
+
         Self {
             current_tick: 0,
             last_finalized_tick: 0,
-            action_queue: [EMPTY_SLOT; ACTION_QUEUE_SLOTS],
+            action_queue,
         }
     }
 
@@ -118,6 +122,14 @@ impl TickQueue {
     }
 
     pub fn finalize_tick(&mut self, tick: usize) {
+        // web_sys::console::log_1(
+        //     &format!(
+        //         "Finalizing tick {}, last finalized {}",
+        //         tick, self.last_finalized_tick
+        //     )
+        //     .into(),
+        // );
+
         let slot = self.queue_slot_at(tick);
 
         // Should not finalize an already finalized tick
@@ -130,7 +142,10 @@ impl TickQueue {
         slot.state = QueueSlotState::Finalized;
 
         // Move up our last finalized tick counter
-        while self.peek_queue_slot_at(self.last_finalized_tick).is_finalized() {
+        while self
+            .peek_queue_slot_at(self.last_finalized_tick + 1)
+            .is_finalized()
+        {
             self.last_finalized_tick += 1;
         }
     }
@@ -146,7 +161,7 @@ impl TickQueue {
         );
 
         slot.actions.append(&mut actions);
-        
+
         self.finalize_tick(tick);
     }
 
@@ -157,11 +172,20 @@ impl TickQueue {
         // advance the tick counter
         self.current_tick += 1;
 
+        //web_sys::console::log_1(&format!("Advancing to tick {}", self.current_tick).into());
+
         // Should not advance past the current finalization horizon
         assert!(
             self.current_queue_slot().is_finalized(),
             "Attempted to advance past the current action horizon at tick {}",
             self.current_tick
+        );
+
+        assert!(
+            self.current_tick <= self.last_finalized_tick,
+            "Attempted to advance past the finalized tick counter: current {} > finalized {}",
+            self.current_tick,
+            self.last_finalized_tick
         );
     }
 
@@ -175,13 +199,17 @@ impl TickQueue {
             !self
                 .peek_queue_slot_at(self.last_finalized_tick + 1)
                 .is_finalized(),
-            "Tick slot after last finalized should not be finalized"
+            "Tick slot after last finalized should not be finalized, at {}",
+            self.last_finalized_tick
         );
 
         self.last_finalized_tick + 1
     }
 
-    pub fn make_tick_finalization_messages(&self, from_tick: usize) -> (usize, Vec<NetworkMessage>) {
+    pub fn make_tick_finalization_messages(
+        &self,
+        from_tick: usize,
+    ) -> (usize, Vec<NetworkMessage>) {
         let mut messages = Vec::new();
 
         for tick in from_tick..=self.last_finalized_tick {

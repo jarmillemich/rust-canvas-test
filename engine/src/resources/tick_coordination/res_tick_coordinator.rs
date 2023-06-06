@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use crate::action::Action;
 
 use super::{action_coordinator::ActionScheduler, tick_queue::TickQueue};
@@ -9,11 +11,11 @@ pub struct TickCoordinator {
     tick_queue: TickQueue,
 
     /// The current ActionScheduler used to coordinate when an action will occur
-    coordinator: Box<dyn ActionScheduler>,
+    pub coordinator: Arc<Mutex<dyn ActionScheduler>>,
 }
 
 impl TickCoordinator {
-    pub fn new(coordinator: Box<dyn ActionScheduler>) -> Self {
+    pub fn new(coordinator: Arc<Mutex<dyn ActionScheduler>>) -> Self {
         Self {
             tick_queue: TickQueue::new(),
             coordinator,
@@ -23,7 +25,10 @@ impl TickCoordinator {
     /// Requests that an action be applied.
     /// Note that it may not be applied immediately
     pub fn add_action(&mut self, action: Action) {
-        self.coordinator.add_action(&mut self.tick_queue, action);
+        self.coordinator
+            .lock()
+            .unwrap()
+            .add_action(&mut self.tick_queue, action);
     }
 
     /// Returns the actions that should be applied in the current tick
@@ -33,7 +38,10 @@ impl TickCoordinator {
 
     /// Must be invoked whenever a tick ends to perform scheduling logic
     pub fn on_tick_end(&mut self) {
-        self.coordinator.synchronize(&mut self.tick_queue);
+        self.coordinator
+            .lock()
+            .unwrap()
+            .synchronize(&mut self.tick_queue);
 
         // Immediately advance whenever we have new finalized ticks
         if self.tick_queue.is_next_tick_finalized() {

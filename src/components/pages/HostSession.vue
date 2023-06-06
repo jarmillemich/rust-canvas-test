@@ -5,22 +5,32 @@
 </template>
 
 <script lang="ts" setup>
-import { Engine, init } from '@engine/canvas_test';
+import { useRtcHelper } from '@/usables/useRtcHelper';
+import { ConnectionToClient, Engine, init } from '@engine/canvas_test';
 import { onMounted, onUnmounted, ref } from 'vue';
+
+let { startHostingSession } = useRtcHelper()
 
 let canvas = ref<HTMLCanvasElement>();
 
 let engine: Engine
+
+startHostingSession(({ connection, channel }) => {
+  if (!engine) throw new Error('No engine yet?')
+
+  let client = new ConnectionToClient(connection, channel)
+  engine.add_client_as_host(client)
+})
 
 onMounted(() => {
   if (!canvas.value) throw new Error('No canvas yet?')
 
   canvas.value.width = canvas.value.clientWidth
   canvas.value.height = canvas.value.clientHeight
- 
+  
   
   engine = init(canvas.value)
-  engine.connect_local();
+  engine.connect_as_host();
   console.log(engine)
   engine.start();
 })

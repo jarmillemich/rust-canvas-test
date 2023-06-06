@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use crate::action::Action;
 
@@ -8,14 +8,20 @@ use super::{
 };
 
 pub struct HostingSession {
-    clients: Vec<ConnectionToClient>,
+    clients: Mutex<Vec<ConnectionToClient>>,
 }
 
 impl HostingSession {
     pub fn new() -> Self {
         Self {
-            clients: Vec::new(),
+            clients: Mutex::new(Vec::new()),
         }
+    }
+}
+
+impl HostingSession {
+    pub fn add_client(&self, client: ConnectionToClient) {
+        self.clients.lock().unwrap().push(client);
     }
 }
 
@@ -27,7 +33,7 @@ impl ActionScheduler for HostingSession {
 
     fn synchronize(&mut self, queue: &mut TickQueue) {
         // TODO for now just adding all pending actions from all clients to the next unfinalized tick
-        for client in &mut self.clients {
+        for client in self.clients.lock().unwrap().iter_mut() {
             for message in client.take_current_messages() {
                 match message {
                     NetworkMessage::ScheduleAction { actions } => {
@@ -45,7 +51,7 @@ impl ActionScheduler for HostingSession {
         queue.finalize_tick(queue.next_unfinalized_tick());
 
         // Send any finalized ticks to all clients
-        for client in &mut self.clients {
+        for client in self.clients.lock().unwrap().iter_mut() {
             client.synchronize_to_queue(queue);
         }
     }

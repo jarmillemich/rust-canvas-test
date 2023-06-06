@@ -4,18 +4,18 @@ use flexbuffers;
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use wasm_bindgen::{prelude::Closure, JsCast};
+use wasm_bindgen::{
+    prelude::{wasm_bindgen, Closure},
+    JsCast,
+};
 use web_sys::{RtcDataChannel, RtcPeerConnection};
 
 use crate::action::Action;
 
-use super::{
-    action_coordinator::ActionScheduler,
-    tick_queue::{self, TickQueue},
-    types::NetworkMessage,
-};
+use super::{action_coordinator::ActionScheduler, tick_queue::TickQueue, types::NetworkMessage};
 
 /// On the client side, a connection to the host
+#[wasm_bindgen]
 pub struct ConnectionToHost {
     connection: RtcPeerConnection,
     channel: RtcDataChannel,
@@ -23,7 +23,9 @@ pub struct ConnectionToHost {
     message_queue: Arc<Mutex<Vec<Vec<u8>>>>,
 }
 
+#[wasm_bindgen]
 impl ConnectionToHost {
+    #[wasm_bindgen(constructor)]
     pub fn new(connection: RtcPeerConnection, channel: RtcDataChannel) -> Self {
         let message_queue = Self::attach_message_queue(&channel);
 
@@ -34,7 +36,9 @@ impl ConnectionToHost {
             message_queue,
         }
     }
+}
 
+impl ConnectionToHost {
     /// Creates and attaches a message queue to the given data channel
     fn attach_message_queue(channel: &RtcDataChannel) -> Arc<Mutex<Vec<Vec<u8>>>> {
         let message_queue = Arc::new(Mutex::new(Vec::new()));

@@ -2,23 +2,26 @@ use std::sync::{Arc, Mutex};
 
 use js_sys::Uint8Array;
 use serde::Deserialize;
-use web_sys::{RtcDataChannel, RtcPeerConnection};
 use wasm_bindgen::prelude::*;
+use web_sys::{RtcDataChannel, RtcPeerConnection};
 
-use super::{types::NetworkMessage, tick_queue::TickQueue};
+use super::{tick_queue::TickQueue, types::NetworkMessage};
 
 /// On the host side, a connection to a client
+#[wasm_bindgen]
 pub struct ConnectionToClient {
     connection: RtcPeerConnection,
     channel: RtcDataChannel,
-    pub message_queue: Arc<Mutex<Vec<Vec<u8>>>>,
+    message_queue: Arc<Mutex<Vec<Vec<u8>>>>,
     last_sync_tick: usize,
 }
 
+#[wasm_bindgen]
 impl ConnectionToClient {
+    #[wasm_bindgen(constructor)]
     pub fn new(connection: RtcPeerConnection, channel: RtcDataChannel) -> Self {
         let message_queue = Self::attach_message_queue(&channel);
-        
+
         Self {
             connection,
             channel,
@@ -26,7 +29,9 @@ impl ConnectionToClient {
             last_sync_tick: 0,
         }
     }
+}
 
+impl ConnectionToClient {
     /// Creates and attaches a message queue to the given data channel
     fn attach_message_queue(channel: &RtcDataChannel) -> Arc<Mutex<Vec<Vec<u8>>>> {
         let message_queue = Arc::new(Mutex::new(Vec::new()));
@@ -49,8 +54,8 @@ impl ConnectionToClient {
         for message in lock.drain(..) {
             let de = flexbuffers::Reader::get_root(message.as_slice())
                 .expect("Message from host should be a Flexbuffer");
-            let mut messages: Vec<NetworkMessage> =
-                Deserialize::deserialize(de).expect("Message from host should be a Vec<NetworkMessage>");
+            let mut messages: Vec<NetworkMessage> = Deserialize::deserialize(de)
+                .expect("Message from host should be a Vec<NetworkMessage>");
             ret.append(&mut messages);
         }
         ret
@@ -63,8 +68,10 @@ impl ConnectionToClient {
         self.last_sync_tick = last_sync_tick;
 
         // Serialize messages
-        let serialized = flexbuffers::to_vec(messages).expect("Messages should serialize to Flexbuffer");
-        self.channel.send_with_u8_array(&serialized).expect("Should be able to send messages");
-
+        let serialized =
+            flexbuffers::to_vec(messages).expect("Messages should serialize to Flexbuffer");
+        self.channel
+            .send_with_u8_array(&serialized)
+            .expect("Should be able to send messages");
     }
 }

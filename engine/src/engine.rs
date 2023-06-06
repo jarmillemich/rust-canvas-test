@@ -15,17 +15,23 @@ use crate::{
     input::EventQueue,
     renderer::init_renderer,
     resources::tick_coordination::{
-        connection_loopback::ConnectionLoopback, res_tick_coordinator::TickCoordinator,
+        connection_loopback::ConnectionLoopback, connection_to_client::ConnectionToClient,
+        connection_to_host::ConnectionToHost, hosting_session::HostingSession,
+        res_tick_coordinator::TickCoordinator,
     },
     systems,
 };
 use specs::prelude::*;
 use wasm_bindgen::{prelude::*, JsCast};
 
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = Engine)]
 pub struct Engine {
     is_running: Arc<AtomicBool>,
     world: Arc<Mutex<World>>,
+    // Eh?
+    loopback_session: Option<Arc<Mutex<ConnectionLoopback>>>,
+    hosting_session: Option<Arc<Mutex<HostingSession>>>,
+    client_session: Option<Arc<Mutex<ConnectionToHost>>>,
 }
 
 pub fn init_engine(canvas: web_sys::HtmlCanvasElement) -> Engine {
@@ -42,6 +48,57 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
         .expect("should register `requestAnimationFrame` OK");
 }
 
+#[wasm_bindgen(js_class = Engine)]
+impl Engine {
+    fn assert_not_connected(&self) {
+        assert!(
+            self.loopback_session.is_none()
+                && self.hosting_session.is_none()
+                && self.client_session.is_none(),
+            "Already connected"
+        );
+    }
+
+    pub fn connect_local(&mut self) {
+        self.assert_not_connected();
+        let mut world = self.world.lock().unwrap();
+        let loopback = Arc::new(Mutex::new(ConnectionLoopback::new()));
+        self.loopback_session = Some(loopback.clone());
+        world.insert(TickCoordinator::new(loopback));
+    }
+
+    pub fn connect_as_host(&mut self) {
+        self.assert_not_connected();
+        let mut world = self.world.lock().unwrap();
+        let session = Arc::new(Mutex::new(HostingSession::new()));
+        self.hosting_session = Some(session.clone());
+        world.insert(TickCoordinator::new(session));
+    }
+
+    pub fn add_client_as_host(&self, client: ConnectionToClient) {
+        // Perform initial synchronization
+        // TODO what?
+
+        //self.world.lock().unwrap().
+
+        // Add to the session
+        self.hosting_session
+            .as_ref()
+            .expect("Must have hosting session to add client")
+            .lock()
+            .unwrap()
+            .add_client(client);
+    }
+
+    pub fn connect_as_client(&mut self, connection: ConnectionToHost) {
+        self.assert_not_connected();
+        let mut world = self.world.lock().unwrap();
+        let client = Arc::new(Mutex::new(connection));
+        self.client_session = Some(client.clone());
+        world.insert(TickCoordinator::new(client));
+    }
+}
+
 impl Engine {
     pub fn new(canvas: &web_sys::HtmlCanvasElement) -> Self {
         Self {
@@ -50,6 +107,9 @@ impl Engine {
             //event_queue: Arc::new(Mutex::new(EventQueue::new()))
             //event_queue: EventQueue::new(),
             //dispatcher: Arc::new(init_dispatcher())
+            loopback_session: None,
+            hosting_session: None,
+            client_session: None,
         }
     }
 
@@ -131,7 +191,7 @@ fn init_world(canvas: &web_sys::HtmlCanvasElement) -> World {
     let event_queue = EventQueue::new();
     event_queue.attach(canvas);
     world.insert(event_queue);
-    world.insert(TickCoordinator::new(box ConnectionLoopback::new()));
+    //world.insert(TickCoordinator::new(Box::new(ConnectionLoopback::new())));
 
     world
 }

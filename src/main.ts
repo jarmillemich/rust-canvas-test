@@ -13,6 +13,16 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('./components/pages/CanvasTest.vue')
+    },
+    {
+      path: '/host',
+      name: 'host',
+      component: () => import('./components/pages/HostSession.vue')
+    },
+    {
+      path: '/join',
+      name: 'join',
+      component: () => import('./components/pages/JoinSession.vue')
     }
   ]
 })
