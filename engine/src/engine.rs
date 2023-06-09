@@ -21,13 +21,14 @@ use crate::{
     },
     systems,
 };
-use specs::prelude::*;
+use bevy::prelude::*;
 use wasm_bindgen::{prelude::*, JsCast};
+use web_sys::HtmlCanvasElement;
 
 #[wasm_bindgen(js_name = Engine)]
 pub struct Engine {
     is_running: Arc<AtomicBool>,
-    world: Arc<Mutex<World>>,
+    app: Arc<Mutex<App>>,
     // Eh?
     loopback_session: Option<Arc<Mutex<ConnectionLoopback>>>,
     hosting_session: Option<Arc<Mutex<HostingSession>>>,
@@ -61,18 +62,18 @@ impl Engine {
 
     pub fn connect_local(&mut self) {
         self.assert_not_connected();
-        let mut world = self.world.lock().unwrap();
+        let mut app = self.app.lock().unwrap();
         let loopback = Arc::new(Mutex::new(ConnectionLoopback::new()));
         self.loopback_session = Some(loopback.clone());
-        world.insert(TickCoordinator::new(loopback));
+        app.insert_non_send_resource(TickCoordinator::new(loopback));
     }
 
     pub fn connect_as_host(&mut self) {
         self.assert_not_connected();
-        let mut world = self.world.lock().unwrap();
+        let mut app = self.app.lock().unwrap();
         let session = Arc::new(Mutex::new(HostingSession::new()));
         self.hosting_session = Some(session.clone());
-        world.insert(TickCoordinator::new(session));
+        app.insert_non_send_resource(TickCoordinator::new(session));
     }
 
     pub fn add_client_as_host(&self, client: ConnectionToClient) {
@@ -92,10 +93,10 @@ impl Engine {
 
     pub fn connect_as_client(&mut self, connection: ConnectionToHost) {
         self.assert_not_connected();
-        let mut world = self.world.lock().unwrap();
+        let mut app = self.app.lock().unwrap();
         let client = Arc::new(Mutex::new(connection));
         self.client_session = Some(client.clone());
-        world.insert(TickCoordinator::new(client));
+        app.insert_non_send_resource(TickCoordinator::new(client));
     }
 }
 
@@ -103,7 +104,7 @@ impl Engine {
     pub fn new(canvas: &web_sys::HtmlCanvasElement) -> Self {
         Self {
             is_running: Arc::new(AtomicBool::new(false)),
-            world: Arc::new(Mutex::new(init_world(canvas))),
+            app: Arc::new(Mutex::new(init_app(canvas))),
             //event_queue: Arc::new(Mutex::new(EventQueue::new()))
             //event_queue: EventQueue::new(),
             //dispatcher: Arc::new(init_dispatcher())
@@ -118,9 +119,7 @@ impl Engine {
         let g = f.clone();
 
         let is_running = self.is_running.clone();
-        let world = self.world.clone();
-        let mut dispatcher = init_dispatcher();
-        //let systems = init_systems();
+        let app = self.app.clone();
 
         *g.borrow_mut() = Some(Closure::new(move || {
             if !is_running.load(Ordering::Relaxed) {
@@ -128,8 +127,8 @@ impl Engine {
                 return;
             }
 
-            dispatcher.dispatch_seq(&world.lock().unwrap());
-            world.lock().unwrap().maintain();
+            // dispatcher.dispatch_seq(&app.lock().unwrap());
+            app.lock().unwrap().update();
 
             request_animation_frame(f.borrow().as_ref().unwrap());
         }));
@@ -153,58 +152,45 @@ impl Engine {
     }
 }
 
-fn init_world(canvas: &web_sys::HtmlCanvasElement) -> World {
-    let mut world = World::new();
-    world.register::<Position>();
-    world.register::<Velocity>();
-    world.register::<Gravity>();
-    world.register::<Color>();
-    world.register::<DrawCircle>();
-    world.register::<GravityEmitter>();
-    world.register::<MovementReceiver>();
-
+fn sys_init_world(mut commands: Commands) {
     // Some test entities that are affected by gravity
     for x in 0..8 {
-        world
-            .create_entity()
-            .with(Position::new_f32(-32. * x as f32, -8.))
-            .with(Velocity::new_f32(1., -1.))
-            .with(Color::new(20 * x as u8, 255 - 16 * x as u8, 0, 255))
-            .with(DrawCircle::new(16.))
-            .with(Gravity)
-            .build();
+        commands.spawn((
+            Position::new_f32(-32. * x as f32, -8.),
+            Velocity::new_f32(1., -1.),
+            Color::new(20 * x as u8, 255 - 16 * x as u8, 0, 255),
+            DrawCircle::new(16.),
+            Gravity,
+        ));
     }
 
     // A movable gravity emitter
-    world
-        .create_entity()
-        .with(Position::new_f32(0., 0.))
-        .with(Velocity::new_f32(0., 0.))
-        .with(GravityEmitter::new())
-        .with(MovementReceiver::new())
-        .with(Color::new(0, 0, 0, 255))
-        .with(DrawCircle::new(8.))
-        .build();
-
-    // Add resources
-    world.insert(init_renderer(canvas).unwrap());
-    let event_queue = EventQueue::new();
-    event_queue.attach(canvas);
-    world.insert(event_queue);
-    //world.insert(TickCoordinator::new(Box::new(ConnectionLoopback::new())));
-
-    world
+    commands.spawn((
+        Position::new_f32(0., 0.),
+        Velocity::new_f32(0., 0.),
+        GravityEmitter::new(),
+        MovementReceiver::new(),
+        Color::new(0, 0, 0, 255),
+        DrawCircle::new(8.),
+    ));
 }
 
-fn init_dispatcher() -> Dispatcher<'static, 'static> {
-    DispatcherBuilder::new()
-        // Register systems
-        .with(systems::SysInput, "Input", &[])
-        .with(systems::SysMovementReceiver, "MovementReceiver", &[])
-        .with(systems::SysFireReceiver, "FireReceiver", &[])
-        .with(systems::SysMovement, "Movement", &["MovementReceiver"])
-        .with(systems::SysGravity, "Gravity", &[])
-        .with(systems::SysRenderer, "Renderer", &[])
-        .with(systems::SysTickCoordinator, "TickCoordinator", &[])
-        .build()
+fn init_app(canvas: &HtmlCanvasElement) -> App {
+    let mut app = App::new();
+
+    // Register systems
+    app.add_system(systems::sys_input)
+        .add_system(systems::sys_movement_receive)
+        .add_system(systems::sys_fire_receive)
+        .add_system(systems::sys_movement.after(systems::sys_movement_receive)) // After mvmt receiver
+        .add_system(systems::sys_gravity)
+        .add_system(systems::sys_renderer)
+        .add_system(systems::sys_tick_coordination)
+        .add_startup_system(sys_init_world);
+
+    // Add resources
+    app.insert_non_send_resource(init_renderer(canvas).unwrap())
+        .insert_resource(EventQueue::new_with_canvas(canvas));
+
+    app
 }

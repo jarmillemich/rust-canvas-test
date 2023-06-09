@@ -21,7 +21,6 @@ wasm-bindgen = { version = "0.2.74", features = ['serde-serialize' ] }
 # code size when deploying.
 console_error_panic_hook = { version = "0.1.6", optional = true }
 js-sys = "0.3.61"
-specs = { git = "https://github.com/amethyst/specs", rev="81073f3", default-features = false }
 bitmask-enum = "2.1.0"
 fixed = "1.23.0"
 serde_json = "1.0.95"
@@ -30,13 +29,21 @@ tokio = { version = "1.27.0", features = ["time"] }
 futures = "0.3.28"
 anyhow = "1.0.70"
 flexbuffers = "2.0.0"
-serde = "1.0.159"
-serde_derive = "1.0.159"
-specs-derive = "0.4.1"
+bevy = { version = "0.10.1" }
+serde = "1.0.163"
+serde_derive = "1.0.163"
 
 [profile.release]
 # Tell `rustc` to optimize for small code size.
 opt-level = "s"
+
+# Enable a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
 
 [dependencies.web-sys]
 version = "0.3.4"

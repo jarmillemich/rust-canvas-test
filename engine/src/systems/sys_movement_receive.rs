@@ -3,34 +3,27 @@ use crate::{
     components::physics::{MovementReceiver, Velocity},
     resources::TickCoordinator,
 };
-use specs::prelude::*;
+use bevy::prelude::*;
 
-pub struct SysMovementReceiver;
-
-impl<'a> System<'a> for SysMovementReceiver {
-    type SystemData = (
-        ReadExpect<'a, TickCoordinator>,
-        WriteStorage<'a, MovementReceiver>,
-        WriteStorage<'a, Velocity>,
-    );
-
-    fn run(&mut self, (tc, mut mr, mut vel): Self::SystemData) {
-        for action in tc.current_tick_actions() {
-            match action {
-                Action::StartMoving { dir } => {
-                    for (mr, vel) in (&mut mr, &mut vel).join() {
-                        mr.direction = mr.direction.or(*dir);
-                        mr.apply(vel);
-                    }
+pub fn sys_movement_receive(
+    tc: NonSend<TickCoordinator>,
+    mut query: Query<(&mut MovementReceiver, &mut Velocity)>,
+) {
+    for action in tc.current_tick_actions() {
+        match action {
+            Action::StartMoving { dir } => {
+                for (mut mr, mut vel) in &mut query {
+                    mr.direction = mr.direction.or(*dir);
+                    mr.apply(&mut vel);
                 }
-                Action::StopMoving { dir } => {
-                    for (mr, vel) in (&mut mr, &mut vel).join() {
-                        mr.direction = mr.direction.and(dir.not());
-                        mr.apply(vel);
-                    }
-                }
-                _ => continue,
             }
+            Action::StopMoving { dir } => {
+                for (mut mr, mut vel) in &mut query {
+                    mr.direction = mr.direction.and(dir.not());
+                    mr.apply(&mut vel);
+                }
+            }
+            _ => continue,
         }
     }
 }

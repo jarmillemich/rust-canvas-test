@@ -1,8 +1,8 @@
-use specs::prelude::*;
+use bevy::prelude::*;
 
 use crate::fixed_point::FixedPoint;
 
-#[derive(Clone)]
+#[derive(Clone, Component)]
 pub struct Position {
     pub x: FixedPoint,
     pub y: FixedPoint,
@@ -16,8 +16,4 @@ impl Position {
     pub fn new_f32(x: f32, y: f32) -> Self {
         Self::new(FixedPoint::from_num(x), FixedPoint::from_num(y))
     }
-}
-
-impl Component for Position {
-    type Storage = VecStorage<Self>;
 }

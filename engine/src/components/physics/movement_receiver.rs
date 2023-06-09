@@ -1,8 +1,9 @@
 use super::Velocity;
 use crate::{action::Direction, fixed_point::FixedPoint};
-use specs::prelude::*;
+use bevy::prelude::*;
 
 /// TODO Testing receiving actions to a VelocityComponent
+#[derive(Component)]
 pub struct MovementReceiver {
     pub direction: Direction,
 }
@@ -13,10 +14,6 @@ impl MovementReceiver {
             direction: Direction::none(),
         }
     }
-}
-
-impl Component for MovementReceiver {
-    type Storage = VecStorage<Self>;
 }
 
 impl MovementReceiver {

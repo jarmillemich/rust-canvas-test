@@ -3,6 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use bevy::prelude::Resource;
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*};
 use web_sys::{EventTarget, HtmlCanvasElement};
 
@@ -20,7 +21,7 @@ pub enum InputEvent {
 
 /// Structure to forward events from JS-land to Rust-land
 #[wasm_bindgen]
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct EventQueue {
     queue: Arc<Mutex<VecDeque<InputEvent>>>,
 }
@@ -31,6 +32,12 @@ impl EventQueue {
         Self {
             queue: Arc::new(Mutex::new(VecDeque::new())),
         }
+    }
+
+    pub fn new_with_canvas(el: &HtmlCanvasElement) -> Self {
+        let queue = EventQueue::new();
+        queue.attach(el);
+        queue
     }
 
     pub fn attach(&self, el: &HtmlCanvasElement) {

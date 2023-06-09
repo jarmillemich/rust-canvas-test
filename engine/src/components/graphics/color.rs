@@ -1,5 +1,6 @@
-use specs::prelude::*;
+use bevy::prelude::*;
 
+#[derive(Component)]
 pub struct Color {
     pub red: u8,
     pub green: u8,
@@ -16,8 +17,4 @@ impl Color {
             alpha,
         }
     }
-}
-
-impl Component for Color {
-    type Storage = VecStorage<Self>;
 }

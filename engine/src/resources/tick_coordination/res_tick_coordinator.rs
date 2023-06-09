@@ -1,8 +1,6 @@
-use std::sync::{Arc, Mutex};
-
-use crate::action::Action;
-
 use super::{action_coordinator::ActionScheduler, tick_queue::TickQueue};
+use crate::action::Action;
+use std::sync::{Arc, Mutex};
 
 /// Manages when we are allowed to tick the simulation
 /// and what actions are to be applied in a particular tick
@@ -11,7 +9,7 @@ pub struct TickCoordinator {
     tick_queue: TickQueue,
 
     /// The current ActionScheduler used to coordinate when an action will occur
-    pub coordinator: Arc<Mutex<dyn ActionScheduler>>,
+    coordinator: Arc<Mutex<dyn ActionScheduler>>,
 }
 
 impl TickCoordinator {
