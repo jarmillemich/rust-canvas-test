@@ -1085,6 +1085,7 @@ dependencies = [
  "flexbuffers",
  "futures",
  "js-sys",
+ "ron",
  "serde",
  "serde-wasm-bindgen",
  "serde_derive",

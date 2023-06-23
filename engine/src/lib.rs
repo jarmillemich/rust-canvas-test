@@ -11,7 +11,7 @@ mod utils;
 
 // Web
 use wasm_bindgen::prelude::*;
-mod engine;
+pub mod engine;
 mod renderer;
 use engine::init_engine;
 

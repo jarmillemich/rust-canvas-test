@@ -32,6 +32,7 @@ flexbuffers = "2.0.0"
 bevy = { version = "0.10.1" }
 serde = "1.0.163"
 serde_derive = "1.0.163"
+ron = "0.8.0"
 
 [profile.release]
 # Tell `rustc` to optimize for small code size.

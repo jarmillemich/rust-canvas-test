@@ -1,5 +1,7 @@
 use std::sync::Mutex;
 
+use bevy::prelude::World;
+
 use crate::action::Action;
 
 use super::{
@@ -31,7 +33,7 @@ impl ActionScheduler for HostingSession {
         queue.enqueue_action(action, queue.next_unfinalized_tick());
     }
 
-    fn synchronize(&mut self, queue: &mut TickQueue) {
+    fn synchronize(&mut self, queue: &mut TickQueue, world: &mut World) {
         // TODO for now just adding all pending actions from all clients to the next unfinalized tick
         for client in self.clients.lock().unwrap().iter_mut() {
             for message in client.take_current_messages() {

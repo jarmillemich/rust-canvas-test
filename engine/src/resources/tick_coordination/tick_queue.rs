@@ -1,3 +1,15 @@
+use std::default;
+
+use bevy::{
+    ecs::entity::EntityMap,
+    prelude::{AppTypeRegistry, AssetServer, Assets, Commands, Handle, World},
+    scene::{
+        serde::{SceneDeserializer, SceneSerializer},
+        DynamicScene, DynamicSceneBundle, Scene, SceneBundle,
+    },
+};
+use serde::de::DeserializeSeed;
+
 use crate::action::Action;
 
 use super::types::NetworkMessage;
@@ -44,6 +56,12 @@ pub struct TickQueue {
     action_queue: [QueueSlot; ACTION_QUEUE_SLOTS],
 }
 
+impl Default for TickQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TickQueue {
     pub fn new() -> Self {
         const EMPTY_SLOT: QueueSlot = QueueSlot {
@@ -60,6 +78,10 @@ impl TickQueue {
             last_finalized_tick: 0,
             action_queue,
         }
+    }
+
+    pub fn get_last_finalized_tick(&self) -> usize {
+        self.last_finalized_tick
     }
 
     /// Retrieves the queue slot for the specified tick
@@ -224,6 +246,36 @@ impl TickQueue {
         }
 
         (self.last_finalized_tick, messages)
+    }
+
+    // TODO not sure where this belongs, probably not here...
+    pub fn load_world(
+        &self,
+        world: &World,
+        commands: &mut Commands,
+        scene: Vec<u8>,
+        last_finalized_tick: usize,
+    ) {
+        //world.clear_entities();
+        // Convert from ron to scene
+        let type_registry = world.resource::<AppTypeRegistry>().read();
+        let srlz = String::from_utf8(scene).unwrap();
+        let mut deserializer = ron::de::Deserializer::from_str(&srlz).unwrap();
+        let scene_deserializer = SceneDeserializer {
+            type_registry: &world.resource::<AppTypeRegistry>().read(),
+        };
+        let scene = scene_deserializer.deserialize(&mut deserializer).unwrap();
+        //let scene = Handle {};
+
+        let scene = world
+            .get_resource::<Assets<DynamicScene>>()
+            .unwrap()
+            .add(scene);
+
+        commands.spawn(DynamicSceneBundle {
+            scene,
+            ..Default::default()
+        });
     }
 }
 

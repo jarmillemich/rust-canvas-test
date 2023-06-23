@@ -7,6 +7,13 @@ use web_sys::{RtcDataChannel, RtcPeerConnection};
 
 use super::{tick_queue::TickQueue, types::NetworkMessage};
 
+enum ConnectionState {
+    NeedsWorldLoad,
+    CatchingUp,
+    Connected,
+    Disconnected,
+}
+
 /// On the host side, a connection to a client
 #[wasm_bindgen]
 pub struct ConnectionToClient {
@@ -14,6 +21,7 @@ pub struct ConnectionToClient {
     channel: RtcDataChannel,
     message_queue: Arc<Mutex<Vec<Vec<u8>>>>,
     last_sync_tick: usize,
+    state: ConnectionState,
 }
 
 #[wasm_bindgen]
@@ -27,6 +35,7 @@ impl ConnectionToClient {
             channel,
             message_queue,
             last_sync_tick: 0,
+            state: ConnectionState::NeedsWorldLoad,
         }
     }
 }
@@ -46,6 +55,10 @@ impl ConnectionToClient {
         channel.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
         on_message.forget();
         message_queue
+    }
+
+    pub fn set_sync(&mut self, tick: usize) {
+        self.last_sync_tick = tick;
     }
 
     pub fn take_current_messages(&mut self) -> Vec<NetworkMessage> {
@@ -72,6 +85,12 @@ impl ConnectionToClient {
             flexbuffers::to_vec(messages).expect("Messages should serialize to Flexbuffer");
         self.channel
             .send_with_u8_array(&serialized)
+            .expect("Should be able to send messages");
+    }
+
+    pub fn send_message(&mut self, message: Vec<u8>) {
+        self.channel
+            .send_with_u8_array(&message)
             .expect("Should be able to send messages");
     }
 }

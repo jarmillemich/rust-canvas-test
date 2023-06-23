@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use bevy::prelude::World;
 use flexbuffers;
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
@@ -19,21 +20,21 @@ use super::{action_coordinator::ActionScheduler, tick_queue::TickQueue, types::N
 pub struct ConnectionToHost {
     connection: RtcPeerConnection,
     channel: RtcDataChannel,
-    action_buffer: Vec<Action>,
-    message_queue: Arc<Mutex<Vec<Vec<u8>>>>,
+    action_send_buffer: Vec<Action>,
+    message_receive_queue: Arc<Mutex<Vec<Vec<u8>>>>,
 }
 
 #[wasm_bindgen]
 impl ConnectionToHost {
     #[wasm_bindgen(constructor)]
     pub fn new(connection: RtcPeerConnection, channel: RtcDataChannel) -> Self {
-        let message_queue = Self::attach_message_queue(&channel);
+        let message_receive_queue = Self::attach_message_queue(&channel);
 
         Self {
             connection,
             channel,
-            action_buffer: Vec::new(),
-            message_queue,
+            action_send_buffer: Vec::new(),
+            message_receive_queue,
         }
     }
 }
@@ -58,20 +59,20 @@ impl ConnectionToHost {
 
 impl ActionScheduler for ConnectionToHost {
     fn add_action(&mut self, queue: &mut TickQueue, action: Action) {
-        self.action_buffer.push(action);
+        self.action_send_buffer.push(action);
     }
 
-    fn synchronize(&mut self, queue: &mut TickQueue) {
+    fn synchronize(&mut self, queue: &mut TickQueue, world: &mut World) {
         // Send everything in the action buffer
         let mut s = flexbuffers::FlexbufferSerializer::new();
-        self.action_buffer.serialize(&mut s).unwrap();
+        self.action_send_buffer.serialize(&mut s).unwrap();
         self.channel
             .send_with_u8_array(s.view())
             .expect("Should be able to send to host");
-        self.action_buffer.clear();
+        self.action_send_buffer.clear();
 
         // Take in everything from the server
-        let mut lock = self.message_queue.lock().unwrap();
+        let mut lock = self.message_receive_queue.lock().unwrap();
         // Just a Vec<Action> for now
         for message in lock.drain(..) {
             let de = flexbuffers::Reader::get_root(message.as_slice())
@@ -84,6 +85,11 @@ impl ActionScheduler for ConnectionToHost {
                     NetworkMessage::FinalizedTick { tick, actions } => {
                         queue.finalize_tick_with_actions(tick, actions);
                     }
+
+                    NetworkMessage::World {
+                        scene,
+                        last_finalized_tick,
+                    } => queue.load_world(world, scene, last_finalized_tick),
 
                     _ => panic!("Unexpected message from host"),
                 }

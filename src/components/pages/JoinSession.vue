@@ -45,7 +45,8 @@ async function start_game() {
   engine = init(canvas.value)
   engine.connect_as_client(hostConnection)
   console.log(engine)
-  engine.start();
+  // Engine will start itself once it is ready in this mode
+  // engine.start();
 }
 
 onUnmounted(() => {

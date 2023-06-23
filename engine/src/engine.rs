@@ -17,7 +17,7 @@ use crate::{
     resources::tick_coordination::{
         connection_loopback::ConnectionLoopback, connection_to_client::ConnectionToClient,
         connection_to_host::ConnectionToHost, hosting_session::HostingSession,
-        res_tick_coordinator::TickCoordinator,
+        res_tick_coordinator::TickCoordinator, types::NetworkMessage,
     },
     systems,
 };
@@ -36,7 +36,9 @@ pub struct Engine {
 }
 
 pub fn init_engine(canvas: web_sys::HtmlCanvasElement) -> Engine {
-    Engine::new(&canvas)
+    let engine = Engine::new();
+    engine.attach_canvas(&canvas);
+    engine
 }
 
 fn window() -> web_sys::Window {
@@ -65,7 +67,8 @@ impl Engine {
         let mut app = self.app.lock().unwrap();
         let loopback = Arc::new(Mutex::new(ConnectionLoopback::new()));
         self.loopback_session = Some(loopback.clone());
-        app.insert_non_send_resource(TickCoordinator::new(loopback));
+        app.insert_non_send_resource(TickCoordinator::new(loopback))
+            .add_startup_system(sys_init_world);
     }
 
     pub fn connect_as_host(&mut self) {
@@ -73,14 +76,38 @@ impl Engine {
         let mut app = self.app.lock().unwrap();
         let session = Arc::new(Mutex::new(HostingSession::new()));
         self.hosting_session = Some(session.clone());
-        app.insert_non_send_resource(TickCoordinator::new(session));
+        app.insert_non_send_resource(TickCoordinator::new(session))
+            .add_startup_system(sys_init_world);
     }
 
-    pub fn add_client_as_host(&self, client: ConnectionToClient) {
-        // Perform initial synchronization
-        // TODO what?
+    pub fn serialize_world(&self) -> Vec<u8> {
+        let world = &self.app.lock().unwrap().world;
+        let type_registry = world.resource::<AppTypeRegistry>();
+        let scene = DynamicScene::from_world(world, type_registry);
+        // let serializer = SceneSerializer::new(&scene, type_registry);
+        // let mid = flexbuffers::to_vec(serializer);
+        // mid.unwrap()
+        scene.serialize_ron(type_registry).unwrap().into_bytes()
+    }
 
-        //self.world.lock().unwrap().
+    pub fn add_client_as_host(&self, mut client: ConnectionToClient) {
+        // Perform initial synchronization
+        let serialized = self.serialize_world();
+        let message = NetworkMessage::World {
+            scene: serialized,
+            last_finalized_tick: 0,
+        };
+        let serialized_message = flexbuffers::to_vec(&message).unwrap();
+        client.send_message(serialized_message);
+        let lft = self
+            .app
+            .lock()
+            .unwrap()
+            .world
+            .get_non_send_resource::<TickCoordinator>()
+            .unwrap()
+            .get_last_finalized_tick();
+        client.set_sync(lft);
 
         // Add to the session
         self.hosting_session
@@ -97,14 +124,21 @@ impl Engine {
         let client = Arc::new(Mutex::new(connection));
         self.client_session = Some(client.clone());
         app.insert_non_send_resource(TickCoordinator::new(client));
+        app.add_system(systems::sys_client_init);
+    }
+}
+
+impl Default for Engine {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl Engine {
-    pub fn new(canvas: &web_sys::HtmlCanvasElement) -> Self {
+    pub fn new() -> Self {
         Self {
             is_running: Arc::new(AtomicBool::new(false)),
-            app: Arc::new(Mutex::new(init_app(canvas))),
+            app: Arc::new(Mutex::new(init_app())),
             //event_queue: Arc::new(Mutex::new(EventQueue::new()))
             //event_queue: EventQueue::new(),
             //dispatcher: Arc::new(init_dispatcher())
@@ -112,6 +146,15 @@ impl Engine {
             hosting_session: None,
             client_session: None,
         }
+    }
+
+    pub fn attach_canvas(&self, canvas: &HtmlCanvasElement) {
+        let mut app = self.app.lock().unwrap();
+        // Add resources
+        app.insert_non_send_resource(init_renderer(canvas).unwrap())
+            .insert_resource(EventQueue::new_with_canvas(canvas))
+            .add_system(systems::sys_renderer)
+            .add_system(systems::sys_input);
     }
 
     fn tick(&self) {
@@ -127,13 +170,16 @@ impl Engine {
                 return;
             }
 
-            // dispatcher.dispatch_seq(&app.lock().unwrap());
             app.lock().unwrap().update();
 
             request_animation_frame(f.borrow().as_ref().unwrap());
         }));
 
         request_animation_frame(g.borrow().as_ref().unwrap());
+    }
+
+    pub fn test_tick(&self) {
+        self.app.lock().unwrap().update();
     }
 }
 
@@ -175,22 +221,15 @@ fn sys_init_world(mut commands: Commands) {
     ));
 }
 
-fn init_app(canvas: &HtmlCanvasElement) -> App {
+fn init_app() -> App {
     let mut app = App::new();
 
     // Register systems
-    app.add_system(systems::sys_input)
-        .add_system(systems::sys_movement_receive)
+    app.add_system(systems::sys_movement_receive)
         .add_system(systems::sys_fire_receive)
         .add_system(systems::sys_movement.after(systems::sys_movement_receive)) // After mvmt receiver
         .add_system(systems::sys_gravity)
-        .add_system(systems::sys_renderer)
-        .add_system(systems::sys_tick_coordination)
-        .add_startup_system(sys_init_world);
-
-    // Add resources
-    app.insert_non_send_resource(init_renderer(canvas).unwrap())
-        .insert_resource(EventQueue::new_with_canvas(canvas));
+        .add_system(systems::sys_tick_coordination);
 
     app
 }
