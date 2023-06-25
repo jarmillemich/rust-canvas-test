@@ -4,7 +4,7 @@
   </section>
   <section v-else>
     <label for="session_name">Session Name</label>
-    <input type="text" id="session_name" v-model="sessionName" />
+    <input type="text" id="session_name" v-model="sessionName" autofocus @keypress.enter="start_game" />
     
     <label for="client_name">Client Name</label>
     <input type="text" id="client_name" v-model="clientName" />
@@ -26,7 +26,7 @@ let canvas = ref<HTMLCanvasElement>();
 let engine: Engine
 
 let sessionName = ref('')
-let clientName = ref('')
+let clientName = ref('asdf')
 
 async function start_game() {
   if (!sessionName.value) throw new Error('No session name yet?')

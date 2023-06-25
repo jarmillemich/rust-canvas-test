@@ -78,6 +78,9 @@ function gatherIceCandidates(connection: RTCPeerConnection): Promise<Array<RTCIc
       log(`Ice error (non-fatal) ${err.errorCode}: ${err.errorText}`)
 
     }
+
+    // Rush things
+    setTimeout(() => resolve(candidates), 1000)
   })
 
 }
@@ -116,7 +119,7 @@ class ClientConnection {
 
   onDataChannel(dc: RTCDataChannel) {
     log('Got data channel!')
-    dc.send('hello from the server')
+    
     this.onConnected({ connection: this.connection, channel: dc })
 
     this.dc = dc;

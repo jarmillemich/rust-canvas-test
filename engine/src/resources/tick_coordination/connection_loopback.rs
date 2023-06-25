@@ -1,4 +1,4 @@
-use bevy::prelude::World;
+use bevy::prelude::*;
 
 use crate::{action::Action, resources::tick_coordination::tick_queue::TickQueue};
 
@@ -18,7 +18,7 @@ impl ActionScheduler for ConnectionLoopback {
         queue.enqueue_action(action, queue.current_tick + 50);
     }
 
-    fn synchronize(&mut self, queue: &mut TickQueue, world: &mut World) {
+    fn synchronize(&mut self, queue: &mut TickQueue, commands: Commands) {
         // Just finalize the next tick
         queue.finalize_tick(queue.current_tick + 1);
     }

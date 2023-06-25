@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use bevy::prelude::World;
+use bevy::prelude::*;
 
 use crate::action::Action;
 
@@ -33,7 +33,7 @@ impl ActionScheduler for HostingSession {
         queue.enqueue_action(action, queue.next_unfinalized_tick());
     }
 
-    fn synchronize(&mut self, queue: &mut TickQueue, world: &mut World) {
+    fn synchronize(&mut self, queue: &mut TickQueue, _commands: Commands) {
         // TODO for now just adding all pending actions from all clients to the next unfinalized tick
         for client in self.clients.lock().unwrap().iter_mut() {
             for message in client.take_current_messages() {

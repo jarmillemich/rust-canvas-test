@@ -1,4 +1,4 @@
-use bevy::prelude::World;
+use bevy::prelude::*;
 
 use super::{action_coordinator::ActionScheduler, tick_queue::TickQueue};
 use crate::action::Action;
@@ -26,6 +26,11 @@ impl TickCoordinator {
         self.tick_queue.get_last_finalized_tick()
     }
 
+    /// Should probably only be used during initialization/joining
+    pub fn set_last_finalized_tick(&mut self, tick: usize) {
+        self.tick_queue.set_last_finalized_tick(tick);
+    }
+
     /// Requests that an action be applied.
     /// Note that it may not be applied immediately
     pub fn add_action(&mut self, action: Action) {
@@ -41,11 +46,11 @@ impl TickCoordinator {
     }
 
     /// Must be invoked whenever a tick ends to perform scheduling logic
-    pub fn on_tick_end(&mut self, world: &mut World) {
+    pub fn on_tick_end(&mut self, commands: Commands) {
         self.coordinator
             .lock()
             .unwrap()
-            .synchronize(&mut self.tick_queue, world);
+            .synchronize(&mut self.tick_queue, commands);
 
         // Immediately advance whenever we have new finalized ticks
         if self.tick_queue.is_next_tick_finalized() {

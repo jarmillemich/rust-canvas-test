@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use futures::channel::oneshot;
 use std::sync::{Arc, Mutex};
 
@@ -36,8 +37,6 @@ impl Default for PeerConnection {
             }))
             .unwrap(),
         );
-
-        RtcPeerConnection::new();
 
         let connection = RtcPeerConnection::new_with_configuration(&config)
             .expect("Should be able to construct an RtcPeerConnection");

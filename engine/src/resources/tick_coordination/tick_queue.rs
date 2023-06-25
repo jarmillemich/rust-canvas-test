@@ -1,18 +1,5 @@
-use std::default;
-
-use bevy::{
-    ecs::entity::EntityMap,
-    prelude::{AppTypeRegistry, AssetServer, Assets, Commands, Handle, World},
-    scene::{
-        serde::{SceneDeserializer, SceneSerializer},
-        DynamicScene, DynamicSceneBundle, Scene, SceneBundle,
-    },
-};
-use serde::de::DeserializeSeed;
-
-use crate::action::Action;
-
 use super::types::NetworkMessage;
+use crate::action::Action;
 
 const ACTION_QUEUE_SLOTS: usize = 128;
 
@@ -82,6 +69,11 @@ impl TickQueue {
 
     pub fn get_last_finalized_tick(&self) -> usize {
         self.last_finalized_tick
+    }
+
+    pub fn set_last_finalized_tick(&mut self, tick: usize) {
+        self.last_finalized_tick = tick;
+        self.current_tick = tick;
     }
 
     /// Retrieves the queue slot for the specified tick
@@ -246,36 +238,6 @@ impl TickQueue {
         }
 
         (self.last_finalized_tick, messages)
-    }
-
-    // TODO not sure where this belongs, probably not here...
-    pub fn load_world(
-        &self,
-        world: &World,
-        commands: &mut Commands,
-        scene: Vec<u8>,
-        last_finalized_tick: usize,
-    ) {
-        //world.clear_entities();
-        // Convert from ron to scene
-        let type_registry = world.resource::<AppTypeRegistry>().read();
-        let srlz = String::from_utf8(scene).unwrap();
-        let mut deserializer = ron::de::Deserializer::from_str(&srlz).unwrap();
-        let scene_deserializer = SceneDeserializer {
-            type_registry: &world.resource::<AppTypeRegistry>().read(),
-        };
-        let scene = scene_deserializer.deserialize(&mut deserializer).unwrap();
-        //let scene = Handle {};
-
-        let scene = world
-            .get_resource::<Assets<DynamicScene>>()
-            .unwrap()
-            .add(scene);
-
-        commands.spawn(DynamicSceneBundle {
-            scene,
-            ..Default::default()
-        });
     }
 }
 

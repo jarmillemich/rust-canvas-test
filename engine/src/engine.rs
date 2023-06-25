@@ -15,9 +15,12 @@ use crate::{
     input::EventQueue,
     renderer::init_renderer,
     resources::tick_coordination::{
-        connection_loopback::ConnectionLoopback, connection_to_client::ConnectionToClient,
-        connection_to_host::ConnectionToHost, hosting_session::HostingSession,
-        res_tick_coordinator::TickCoordinator, types::NetworkMessage,
+        connection_loopback::ConnectionLoopback,
+        connection_to_client::ConnectionToClient,
+        connection_to_host::ConnectionToHost,
+        hosting_session::HostingSession,
+        res_tick_coordinator::TickCoordinator,
+        types::{NetworkMessage, WorldLoad},
     },
     systems,
 };
@@ -92,12 +95,13 @@ impl Engine {
 
     pub fn add_client_as_host(&self, mut client: ConnectionToClient) {
         // Perform initial synchronization
+        web_sys::console::log_1(&"Sending world to client".into());
         let serialized = self.serialize_world();
-        let message = NetworkMessage::World {
+        let message = NetworkMessage::World(WorldLoad {
             scene: serialized,
             last_finalized_tick: 0,
-        };
-        let serialized_message = flexbuffers::to_vec(&message).unwrap();
+        });
+        let serialized_message = flexbuffers::to_vec(&vec![message]).unwrap();
         client.send_message(serialized_message);
         let lft = self
             .app
@@ -120,11 +124,14 @@ impl Engine {
 
     pub fn connect_as_client(&mut self, connection: ConnectionToHost) {
         self.assert_not_connected();
-        let mut app = self.app.lock().unwrap();
-        let client = Arc::new(Mutex::new(connection));
-        self.client_session = Some(client.clone());
-        app.insert_non_send_resource(TickCoordinator::new(client));
-        app.add_system(systems::sys_client_init);
+        {
+            let mut app = self.app.lock().unwrap();
+            let client = Arc::new(Mutex::new(connection));
+            self.client_session = Some(client.clone());
+            app.insert_non_send_resource(TickCoordinator::new(client));
+            //app.add_system(systems::sys_client_init);
+        }
+        self.start();
     }
 }
 
@@ -230,6 +237,8 @@ fn init_app() -> App {
         .add_system(systems::sys_movement.after(systems::sys_movement_receive)) // After mvmt receiver
         .add_system(systems::sys_gravity)
         .add_system(systems::sys_tick_coordination);
+
+    systems::setup_systems(&mut app);
 
     app
 }

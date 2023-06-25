@@ -15,11 +15,25 @@ let canvas = ref<HTMLCanvasElement>();
 
 let engine: Engine
 
-startHostingSession(({ connection, channel }) => {
+startHostingSession(async ({ connection, channel }) => {
   if (!engine) throw new Error('No engine yet?')
+
+  // XXX Just waiting for client ready here
+  await new Promise<void>((resolve, reject) => {
+    channel.onmessage = ({ data }) => {
+      if (data === 'ready') {
+        console.log('Client indicated readiness')
+        resolve()
+      } else {
+        reject(new Error('Invalid first client message'))
+      }
+    }
+  })
 
   let client = new ConnectionToClient(connection, channel)
   engine.add_client_as_host(client)
+
+  console.log('Client connected')
 })
 
 onMounted(() => {
