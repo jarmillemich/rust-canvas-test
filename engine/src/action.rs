@@ -1,10 +1,11 @@
+use bevy::reflect::{FromReflect, Reflect};
 use bitmask_enum::bitmask;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::fixed_point::FixedPoint;
 
 #[bitmask(u8)]
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Reflect, FromReflect)]
 pub enum Direction {
     Up,
     Down,

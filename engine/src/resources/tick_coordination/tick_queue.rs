@@ -1,7 +1,8 @@
 use super::types::NetworkMessage;
 use crate::action::Action;
 
-const ACTION_QUEUE_SLOTS: usize = 128;
+// XXX cheating
+const ACTION_QUEUE_SLOTS: usize = 1024;
 
 enum QueueSlotState {
     /// We should not yet process this slot
@@ -74,6 +75,13 @@ impl TickQueue {
     pub fn set_last_finalized_tick(&mut self, tick: usize) {
         self.last_finalized_tick = tick;
         self.current_tick = tick;
+
+        // Reset everything, something else is responsible now
+        // for slot in self.action_queue.iter_mut() {
+        //     slot.reset();
+        // }
+
+        self.finalize_tick(tick);
     }
 
     /// Retrieves the queue slot for the specified tick
@@ -170,8 +178,8 @@ impl TickQueue {
         // Should not finalize an already finalized tick
         assert!(
             !slot.is_finalized(),
-            "Attempted to finalize the current tick {}",
-            self.current_tick
+            "Attempted to finalize an already finalized tick tick {}",
+            tick
         );
 
         slot.actions.append(&mut actions);
@@ -185,8 +193,6 @@ impl TickQueue {
 
         // advance the tick counter
         self.current_tick += 1;
-
-        //web_sys::console::log_1(&format!("Advancing to tick {}", self.current_tick).into());
 
         // Should not advance past the current finalization horizon
         assert!(

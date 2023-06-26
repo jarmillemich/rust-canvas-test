@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
 pub struct Color {
     pub red: u8,
     pub green: u8,

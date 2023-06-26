@@ -1,8 +1,12 @@
-use bevy::prelude::*;
-
 use crate::fixed_point::FixedPoint;
+use bevy::{
+    ecs::reflect,
+    prelude::*,
+    reflect::{ReflectFromReflect, ValueInfo},
+};
 
-#[derive(Clone, Component)]
+#[derive(Component, Default, Reflect)]
+#[reflect(Component)]
 pub struct Position {
     pub x: FixedPoint,
     pub y: FixedPoint,

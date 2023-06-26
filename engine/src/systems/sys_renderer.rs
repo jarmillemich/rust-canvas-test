@@ -11,6 +11,8 @@ pub fn sys_renderer(
     mut renderer: NonSendMut<Renderer>,
     query: Query<(&Position, &Color, &DrawCircle)>,
 ) {
+    // web_sys::console::log_1(&format!("Rendering {} circles", query.iter().count()).into());
+
     for (pos, col, circle) in query.iter() {
         // Arbitrarily chosen "center" for the moment
         let cx = 400.;

@@ -1,17 +1,16 @@
 use bevy::{
-    ecs::entity::EntityMap,
-    prelude::{AppTypeRegistry, AssetServer, Assets, Commands, Handle, World, *},
-    scene::{
-        serde::{SceneDeserializer, SceneSerializer},
-        DynamicScene, DynamicSceneBundle, Scene, SceneBundle,
-    },
+    prelude::{AppTypeRegistry, Assets, World, *},
+    scene::{serde::SceneDeserializer, DynamicScene, DynamicSceneBundle},
 };
 use serde::de::DeserializeSeed;
 
-use crate::resources::{tick_coordination::types::WorldLoad, TickCoordinator};
+use crate::{
+    engine::SimulationState,
+    resources::{tick_coordination::types::WorldLoad, TickCoordinator},
+};
 
 #[derive(States, PartialEq, Debug, Clone, Hash, Default, Eq)]
-enum ClientJoinState {
+pub enum ClientJoinState {
     /// Game is not currently a client of another game
     #[default]
     NonClient,
@@ -24,6 +23,8 @@ enum ClientJoinState {
 }
 
 fn sys_try_load_world(world: &mut World) {
+    web_sys::console::log_1(&"[client] Loading world maybe".into());
+
     // Start afresh
     // TODO maybe have a marker component so we don't clear special things?
     world.clear_entities();
@@ -33,18 +34,27 @@ fn sys_try_load_world(world: &mut World) {
 
     // Convert from ron to DynamicScene we can insert
     let scene = {
-        let srlz = String::from_utf8(scene).unwrap();
-        let mut deserializer = ron::de::Deserializer::from_str(&srlz).unwrap();
+        // let srlz = String::from_utf8(scene).unwrap();
+        // web_sys::console::log_1(&srlz.clone().into());
+        let mut deserializer = ron::de::Deserializer::from_bytes(&scene).unwrap();
         let scene_deserializer = SceneDeserializer {
             type_registry: &world.resource::<AppTypeRegistry>().read(),
         };
         scene_deserializer.deserialize(&mut deserializer).unwrap()
     };
 
+    web_sys::console::log_1(
+        &format!(
+            "[client] Initial scene from server has {} entities",
+            scene.entities.len()
+        )
+        .into(),
+    );
+
     // Wrap in an asset
     let scene = world
         .get_resource_mut::<Assets<DynamicScene>>()
-        .unwrap()
+        .expect("Should be able to get a DynamicScene asset to deserialize into")
         .add(scene);
 
     // Spawn the scene
@@ -68,7 +78,19 @@ fn sys_try_load_world(world: &mut World) {
         .unwrap()
         .set(ClientJoinState::CatchingUp);
 
-    web_sys::console::log_1(&"[client] Loaded world".into());
+    // TESTING just allow regular running
+    world
+        .get_resource_mut::<NextState<SimulationState>>()
+        .unwrap()
+        .set(SimulationState::Running);
+
+    web_sys::console::log_1(
+        &format!(
+            "[client] Loaded world, initial tick was {}",
+            world_load.last_finalized_tick
+        )
+        .into(),
+    );
 }
 
 pub fn attach_to_app(app: &mut App) {

@@ -1,8 +1,8 @@
+use crate::fixed_point::FixedPoint;
 use bevy::prelude::*;
 
-use crate::fixed_point::FixedPoint;
-
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
 pub struct Velocity {
     pub vx: FixedPoint,
     pub vy: FixedPoint,

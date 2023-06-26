@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
 pub struct DrawCircle {
     pub radius: f32,
 }

@@ -3,7 +3,10 @@ use crate::{action::Direction, fixed_point::FixedPoint};
 use bevy::prelude::*;
 
 /// TODO Testing receiving actions to a VelocityComponent
-#[derive(Component)]
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+
 pub struct MovementReceiver {
     pub direction: Direction,
 }

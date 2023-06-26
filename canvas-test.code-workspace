@@ -43,6 +43,7 @@
 			"keydown",
 			"keyup",
 			"mousemove",
+			"Newtype",
 			"oneshot",
 			"onicecandidate",
 			"saveload",

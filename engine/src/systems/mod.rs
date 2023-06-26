@@ -24,7 +24,7 @@ pub use sys_fire_receive::sys_fire_receive;
 mod sys_client_init;
 pub use sys_client_init::sys_client_init;
 
-mod set_client_connection;
+pub mod set_client_connection;
 
 pub fn setup_systems(app: &mut App) {
     set_client_connection::attach_to_app(app);

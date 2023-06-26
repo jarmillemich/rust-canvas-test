@@ -76,7 +76,10 @@ impl ActionScheduler for ConnectionToHost {
     fn synchronize(&mut self, queue: &mut TickQueue, mut commands: Commands) {
         // Send everything in the action buffer
         let mut s = flexbuffers::FlexbufferSerializer::new();
-        self.action_send_buffer.serialize(&mut s).unwrap();
+        let schedule_action_container = vec![NetworkMessage::ScheduleAction {
+            actions: self.action_send_buffer.drain(..).collect(),
+        }];
+        schedule_action_container.serialize(&mut s).unwrap();
         self.channel
             .send_with_u8_array(s.view())
             .expect("Should be able to send to host");
@@ -99,7 +102,9 @@ impl ActionScheduler for ConnectionToHost {
             for message in messages {
                 match message {
                     NetworkMessage::FinalizedTick { tick, actions } => {
-                        web_sys::console::log_1(&"Got tick finalization".into());
+                        web_sys::console::log_1(
+                            &format!("Got tick finalization for {tick}").into(),
+                        );
                         queue.finalize_tick_with_actions(tick, actions);
                     }
                     // TODO should we just be add/removing resources willy nilly?

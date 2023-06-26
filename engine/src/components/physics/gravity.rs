@@ -1,4 +1,6 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, reflect::ReflectFromReflect};
 
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+
 pub struct Gravity;

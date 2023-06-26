@@ -15,7 +15,7 @@ pub fn sys_gravity(
             let dy = pos.y - gravity_position.y;
 
             assert!(
-                dx != 0 || dy != 0,
+                dx.to_num::<f32>() != 0.0 || dy.to_num::<f32>() != 0.0,
                 "Two gravity entities in the same location"
             );
 

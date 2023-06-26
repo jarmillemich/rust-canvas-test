@@ -9,6 +9,7 @@ use std::{
 
 use crate::{
     components::{
+        self,
         graphics::{Color, DrawCircle},
         physics::{Gravity, GravityEmitter, MovementReceiver, Position, Velocity},
     },
@@ -19,12 +20,12 @@ use crate::{
         connection_to_client::ConnectionToClient,
         connection_to_host::ConnectionToHost,
         hosting_session::HostingSession,
-        res_tick_coordinator::TickCoordinator,
+        res_tick_coordinator::{self, TickCoordinator},
         types::{NetworkMessage, WorldLoad},
     },
     systems,
 };
-use bevy::prelude::*;
+use bevy::{prelude::*, scene::ScenePlugin};
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::HtmlCanvasElement;
 
@@ -36,6 +37,13 @@ pub struct Engine {
     loopback_session: Option<Arc<Mutex<ConnectionLoopback>>>,
     hosting_session: Option<Arc<Mutex<HostingSession>>>,
     client_session: Option<Arc<Mutex<ConnectionToHost>>>,
+}
+
+// TESTING
+impl Engine {
+    pub fn get_app(&self) -> Arc<Mutex<App>> {
+        self.app.clone()
+    }
 }
 
 pub fn init_engine(canvas: web_sys::HtmlCanvasElement) -> Engine {
@@ -72,6 +80,11 @@ impl Engine {
         self.loopback_session = Some(loopback.clone());
         app.insert_non_send_resource(TickCoordinator::new(loopback))
             .add_startup_system(sys_init_world);
+
+        app.world
+            .get_resource_mut::<NextState<SimulationState>>()
+            .unwrap()
+            .set(SimulationState::Running);
     }
 
     pub fn connect_as_host(&mut self) {
@@ -81,6 +94,11 @@ impl Engine {
         self.hosting_session = Some(session.clone());
         app.insert_non_send_resource(TickCoordinator::new(session))
             .add_startup_system(sys_init_world);
+
+        app.world
+            .get_resource_mut::<NextState<SimulationState>>()
+            .unwrap()
+            .set(SimulationState::Running);
     }
 
     pub fn serialize_world(&self) -> Vec<u8> {
@@ -90,19 +108,17 @@ impl Engine {
         // let serializer = SceneSerializer::new(&scene, type_registry);
         // let mid = flexbuffers::to_vec(serializer);
         // mid.unwrap()
-        scene.serialize_ron(type_registry).unwrap().into_bytes()
+        let srlz = scene.serialize_ron(type_registry).unwrap();
+
+        // web_sys::console::log_1(&format!("Serialized world: {}", srlz).into());
+
+        srlz.into_bytes()
     }
 
     pub fn add_client_as_host(&self, mut client: ConnectionToClient) {
         // Perform initial synchronization
         web_sys::console::log_1(&"Sending world to client".into());
-        let serialized = self.serialize_world();
-        let message = NetworkMessage::World(WorldLoad {
-            scene: serialized,
-            last_finalized_tick: 0,
-        });
-        let serialized_message = flexbuffers::to_vec(&vec![message]).unwrap();
-        client.send_message(serialized_message);
+
         let lft = self
             .app
             .lock()
@@ -112,6 +128,14 @@ impl Engine {
             .unwrap()
             .get_last_finalized_tick();
         client.set_sync(lft);
+
+        let serialized = self.serialize_world();
+        let message = NetworkMessage::World(WorldLoad {
+            scene: serialized,
+            last_finalized_tick: lft,
+        });
+        let serialized_message = flexbuffers::to_vec(&vec![message]).unwrap();
+        client.send_message(serialized_message);
 
         // Add to the session
         self.hosting_session
@@ -130,6 +154,12 @@ impl Engine {
             self.client_session = Some(client.clone());
             app.insert_non_send_resource(TickCoordinator::new(client));
             //app.add_system(systems::sys_client_init);
+
+            use systems::set_client_connection::ClientJoinState;
+            app.world
+                .get_resource_mut::<NextState<ClientJoinState>>()
+                .unwrap()
+                .set(ClientJoinState::WaitingForWorld);
         }
         self.start();
     }
@@ -228,17 +258,48 @@ fn sys_init_world(mut commands: Commands) {
     ));
 }
 
+#[derive(States, PartialEq, Debug, Clone, Hash, Default, Eq)]
+pub enum SimulationState {
+    #[default]
+    Paused,
+    Running,
+}
+
 fn init_app() -> App {
     let mut app = App::new();
 
+    app.add_state::<SimulationState>();
+
+    let sim_systems = (
+        systems::sys_movement_receive,
+        systems::sys_fire_receive,
+        systems::sys_movement.after(systems::sys_movement_receive),
+        systems::sys_gravity,
+    );
+
     // Register systems
-    app.add_system(systems::sys_movement_receive)
-        .add_system(systems::sys_fire_receive)
-        .add_system(systems::sys_movement.after(systems::sys_movement_receive)) // After mvmt receiver
-        .add_system(systems::sys_gravity)
-        .add_system(systems::sys_tick_coordination);
+    app.add_systems(
+        sim_systems
+            //.distributive_run_if(in_state(SimulationState::Running).and_then(is_tick_coord_ready)),
+            .distributive_run_if(is_tick_coord_ready),
+    )
+    .add_system(systems::sys_tick_coordination);
 
     systems::setup_systems(&mut app);
 
+    // Eh
+    app.add_plugin(AssetPlugin { ..default() })
+        .add_plugin(ScenePlugin);
+
+    // Register any components that should be synced
+    components::register_components(&mut app);
+
     app
+}
+
+fn is_tick_coord_ready(
+    tc: NonSend<TickCoordinator>,
+    sim_state: Res<State<SimulationState>>,
+) -> bool {
+    sim_state.0 == SimulationState::Running // && tc.is_next_tick_finalized()
 }

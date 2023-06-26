@@ -22,6 +22,10 @@ impl TickCoordinator {
         }
     }
 
+    pub fn is_next_tick_finalized(&self) -> bool {
+        self.tick_queue.is_next_tick_finalized()
+    }
+
     pub fn get_last_finalized_tick(&self) -> usize {
         self.tick_queue.get_last_finalized_tick()
     }
@@ -53,7 +57,23 @@ impl TickCoordinator {
             .synchronize(&mut self.tick_queue, commands);
 
         // Immediately advance whenever we have new finalized ticks
+        web_sys::console::log_1(
+            &format!(
+                "TickCoordinator: Last finalized tick is {}, at {}",
+                self.tick_queue.get_last_finalized_tick(),
+                self.tick_queue.current_tick,
+            )
+            .into(),
+        );
         if self.tick_queue.is_next_tick_finalized() {
+            web_sys::console::log_1(
+                &format!(
+                    "TickCoordinator: Advancing tick from {} to {}",
+                    self.tick_queue.current_tick,
+                    self.tick_queue.current_tick + 1
+                )
+                .into(),
+            );
             self.tick_queue.advance();
         }
     }

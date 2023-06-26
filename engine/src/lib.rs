@@ -1,3 +1,8 @@
+#[macro_use]
+extern crate custom_derive;
+#[macro_use]
+extern crate newtype_derive;
+
 // Types
 mod action;
 mod fixed_point;

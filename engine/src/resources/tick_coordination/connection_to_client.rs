@@ -76,7 +76,8 @@ impl ConnectionToClient {
 
     pub fn synchronize_to_queue(&mut self, queue: &TickQueue) {
         // Send all ticks between this clients last synced tick and the latest available finalized tick
-        let (last_sync_tick, messages) = queue.make_tick_finalization_messages(self.last_sync_tick);
+        let (last_sync_tick, messages) =
+            queue.make_tick_finalization_messages(self.last_sync_tick + 1);
         // Just kind of move things forward, we'll want to get ACKs from the client later
         self.last_sync_tick = last_sync_tick;
 
