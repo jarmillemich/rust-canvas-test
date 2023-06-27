@@ -26,12 +26,7 @@ pub enum Action {
     Jump,
 
     /// Indicate the movement of the cursor
-    Cursor {
-        #[serde(with = "crate::fixed_point")]
-        x: FixedPoint,
-        #[serde(with = "crate::fixed_point")]
-        y: FixedPoint,
-    },
+    Cursor { x: FixedPoint, y: FixedPoint },
 
     /// Indicate firing a weapon/ability
     Fire,

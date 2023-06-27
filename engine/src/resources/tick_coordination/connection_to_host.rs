@@ -22,6 +22,8 @@ pub struct ConnectionToHost {
     channel: RtcDataChannel,
     action_send_buffer: Vec<Action>,
     message_receive_queue: Arc<Mutex<Vec<Vec<u8>>>>,
+    initial_connection_buffer: Vec<NetworkMessage>,
+    has_received_world: bool,
 }
 
 #[wasm_bindgen]
@@ -35,6 +37,8 @@ impl ConnectionToHost {
             channel,
             action_send_buffer: Vec::new(),
             message_receive_queue,
+            initial_connection_buffer: Vec::new(),
+            has_received_world: false,
         }
     }
 }
@@ -66,6 +70,10 @@ impl ConnectionToHost {
             .send_with_u8_array(s.view())
             .expect("Should be able to send to host");
     }
+
+    pub fn mark_world_received(&mut self) {
+        self.has_received_world = true;
+    }
 }
 
 impl ActionScheduler for ConnectionToHost {
@@ -92,25 +100,36 @@ impl ActionScheduler for ConnectionToHost {
             .unwrap()
             .drain(..)
             .collect();
-        // Just a Vec<Action> for now
+
         for message in things {
             let de = flexbuffers::Reader::get_root(message.as_slice())
                 .expect("Message from host should be a Flexbuffer");
-            let messages: Vec<NetworkMessage> = Deserialize::deserialize(de)
+            let mut messages: Vec<NetworkMessage> = Deserialize::deserialize(de)
                 .expect("Message from host should be a Vec<NetworkMessage>");
 
-            for message in messages {
+            // XXX Hacky replay
+            if self.has_received_world && !self.initial_connection_buffer.is_empty() {
+                messages.append(&mut self.initial_connection_buffer);
+            }
+
+            while let Some(message) = messages.pop() {
                 match message {
                     NetworkMessage::FinalizedTick { tick, actions } => {
                         web_sys::console::log_1(
                             &format!("Got tick finalization for {tick}").into(),
                         );
-                        queue.finalize_tick_with_actions(tick, actions);
+
+                        if self.has_received_world {
+                            queue.finalize_tick_with_actions(tick, actions);
+                        } else {
+                            self.initial_connection_buffer
+                                .push(NetworkMessage::FinalizedTick { tick, actions });
+                        }
                     }
-                    // TODO should we just be add/removing resources willy nilly?
+                    // TODO should we just be add/removing resources willy gilly?
                     NetworkMessage::World(world_load) => {
                         web_sys::console::log_1(&"Received world from host".into());
-                        commands.insert_resource(world_load)
+                        commands.insert_resource(world_load);
                     }
 
                     _ => panic!("Unexpected message from host"),

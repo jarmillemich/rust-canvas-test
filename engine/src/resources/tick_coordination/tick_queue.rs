@@ -2,7 +2,7 @@ use super::types::NetworkMessage;
 use crate::action::Action;
 
 // XXX cheating
-const ACTION_QUEUE_SLOTS: usize = 1024;
+const ACTION_QUEUE_SLOTS: usize = 256;
 
 enum QueueSlotState {
     /// We should not yet process this slot
@@ -57,9 +57,7 @@ impl TickQueue {
             actions: Vec::new(),
         };
 
-        let mut action_queue = [EMPTY_SLOT; ACTION_QUEUE_SLOTS];
-        // Mark the zeroth tick as always finalized to get us started
-        action_queue[0].state = QueueSlotState::Finalized;
+        let action_queue = [EMPTY_SLOT; ACTION_QUEUE_SLOTS];
 
         Self {
             current_tick: 0,

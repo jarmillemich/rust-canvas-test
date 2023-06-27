@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use bevy::{
     prelude::{AppTypeRegistry, Assets, World, *},
     scene::{serde::SceneDeserializer, DynamicScene, DynamicSceneBundle},
@@ -6,7 +8,10 @@ use serde::de::DeserializeSeed;
 
 use crate::{
     engine::SimulationState,
-    resources::{tick_coordination::types::WorldLoad, TickCoordinator},
+    resources::{
+        tick_coordination::{connection_to_host::ConnectionToHost, types::WorldLoad},
+        TickCoordinator,
+    },
 };
 
 #[derive(States, PartialEq, Debug, Clone, Hash, Default, Eq)]
@@ -83,6 +88,14 @@ fn sys_try_load_world(world: &mut World) {
         .get_resource_mut::<NextState<SimulationState>>()
         .unwrap()
         .set(SimulationState::Running);
+
+    // Let our connection know it can let buffered ticks through
+    world
+        .get_non_send_resource_mut::<Arc<Mutex<ConnectionToHost>>>()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .mark_world_received();
 
     web_sys::console::log_1(
         &format!(

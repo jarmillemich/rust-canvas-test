@@ -20,7 +20,7 @@ use crate::{
         connection_to_client::ConnectionToClient,
         connection_to_host::ConnectionToHost,
         hosting_session::HostingSession,
-        res_tick_coordinator::{self, TickCoordinator},
+        res_tick_coordinator::TickCoordinator,
         types::{NetworkMessage, WorldLoad},
     },
     systems,
@@ -33,7 +33,7 @@ use web_sys::HtmlCanvasElement;
 pub struct Engine {
     is_running: Arc<AtomicBool>,
     app: Arc<Mutex<App>>,
-    // Eh?
+    // TODO perhaps make an enum out of this
     loopback_session: Option<Arc<Mutex<ConnectionLoopback>>>,
     hosting_session: Option<Arc<Mutex<HostingSession>>>,
     client_session: Option<Arc<Mutex<ConnectionToHost>>>,
@@ -64,6 +64,7 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
 
 #[wasm_bindgen(js_class = Engine)]
 impl Engine {
+    /// Asserts that we have not already started a session
     fn assert_not_connected(&self) {
         assert!(
             self.loopback_session.is_none()
@@ -73,6 +74,7 @@ impl Engine {
         );
     }
 
+    /// Starts a local session
     pub fn connect_local(&mut self) {
         self.assert_not_connected();
         let mut app = self.app.lock().unwrap();
@@ -87,6 +89,7 @@ impl Engine {
             .set(SimulationState::Running);
     }
 
+    /// Starts a hosting session that others can join
     pub fn connect_as_host(&mut self) {
         self.assert_not_connected();
         let mut app = self.app.lock().unwrap();
@@ -101,23 +104,26 @@ impl Engine {
             .set(SimulationState::Running);
     }
 
+    /// Serializes the world, e.g. to send to a newly connected client
     pub fn serialize_world(&self) -> Vec<u8> {
+        // Pack everything into a scene
         let world = &self.app.lock().unwrap().world;
         let type_registry = world.resource::<AppTypeRegistry>();
         let scene = DynamicScene::from_world(world, type_registry);
-        // let serializer = SceneSerializer::new(&scene, type_registry);
-        // let mid = flexbuffers::to_vec(serializer);
-        // mid.unwrap()
-        let srlz = scene.serialize_ron(type_registry).unwrap();
 
-        // web_sys::console::log_1(&format!("Serialized world: {}", srlz).into());
+        // Serialize into a RON string
+        // TODO we should perhaps just directly serialize into bytes, this method produces a prettified version
+        let serialized = scene.serialize_ron(type_registry).unwrap();
 
-        srlz.into_bytes()
+        serialized.into_bytes()
     }
 
+    /// Adds a new client to a hosting session
     pub fn add_client_as_host(&self, mut client: ConnectionToClient) {
-        // Perform initial synchronization
-        web_sys::console::log_1(&"Sending world to client".into());
+        assert!(
+            self.hosting_session.is_some(),
+            "Must be hosting to accept clients"
+        );
 
         let lft = self
             .app
@@ -134,7 +140,7 @@ impl Engine {
             scene: serialized,
             last_finalized_tick: lft,
         });
-        let serialized_message = flexbuffers::to_vec(&vec![message]).unwrap();
+        let serialized_message = flexbuffers::to_vec(vec![message]).unwrap();
         client.send_message(serialized_message);
 
         // Add to the session
@@ -146,14 +152,15 @@ impl Engine {
             .add_client(client);
     }
 
+    /// Connects to a remote session as a client
     pub fn connect_as_client(&mut self, connection: ConnectionToHost) {
         self.assert_not_connected();
         {
             let mut app = self.app.lock().unwrap();
             let client = Arc::new(Mutex::new(connection));
             self.client_session = Some(client.clone());
-            app.insert_non_send_resource(TickCoordinator::new(client));
-            //app.add_system(systems::sys_client_init);
+            app.insert_non_send_resource(TickCoordinator::new(client.clone()));
+            app.insert_non_send_resource(client);
 
             use systems::set_client_connection::ClientJoinState;
             app.world
@@ -278,12 +285,8 @@ fn init_app() -> App {
     );
 
     // Register systems
-    app.add_systems(
-        sim_systems
-            //.distributive_run_if(in_state(SimulationState::Running).and_then(is_tick_coord_ready)),
-            .distributive_run_if(is_tick_coord_ready),
-    )
-    .add_system(systems::sys_tick_coordination);
+    app.add_systems(sim_systems.distributive_run_if(can_simulation_proceed))
+        .add_system(systems::sys_tick_coordination);
 
     systems::setup_systems(&mut app);
 
@@ -297,7 +300,8 @@ fn init_app() -> App {
     app
 }
 
-fn is_tick_coord_ready(
+/// Determines if we are currently able to advance a tick, as opposed to waiting
+fn can_simulation_proceed(
     tc: NonSend<TickCoordinator>,
     sim_state: Res<State<SimulationState>>,
 ) -> bool {

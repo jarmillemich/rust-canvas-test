@@ -21,9 +21,6 @@ pub use sys_movement_receive::sys_movement_receive;
 mod sys_fire_receive;
 pub use sys_fire_receive::sys_fire_receive;
 
-mod sys_client_init;
-pub use sys_client_init::sys_client_init;
-
 pub mod set_client_connection;
 
 pub fn setup_systems(app: &mut App) {
