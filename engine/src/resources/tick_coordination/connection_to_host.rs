@@ -49,8 +49,6 @@ impl ConnectionToHost {
         let message_queue = Arc::new(Mutex::new(Vec::new()));
         let message_queue_clone = message_queue.clone();
         let on_message = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
-            web_sys::console::log_1(&"Received message from network".into());
-
             let buffer = event.data();
             let array = Uint8Array::new(&buffer);
             let bytes = array.to_vec();
@@ -115,15 +113,15 @@ impl ActionScheduler for ConnectionToHost {
             while let Some(message) = messages.pop() {
                 match message {
                     NetworkMessage::FinalizedTick { tick, actions } => {
-                        web_sys::console::log_1(
-                            &format!("Got tick finalization for {tick}").into(),
-                        );
-
                         if self.has_received_world {
                             queue.finalize_tick_with_actions(tick, actions);
                         } else {
                             self.initial_connection_buffer
                                 .push(NetworkMessage::FinalizedTick { tick, actions });
+
+                            web_sys::console::log_1(
+                                &format!("Holding tick finalization for {tick}").into(),
+                            );
                         }
                     }
                     // TODO should we just be add/removing resources willy gilly?

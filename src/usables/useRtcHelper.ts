@@ -80,7 +80,7 @@ function gatherIceCandidates(connection: RTCPeerConnection): Promise<Array<RTCIc
     }
 
     // Rush things
-    setTimeout(() => resolve(candidates), 1000)
+    setTimeout(() => resolve(candidates), 3000)
   })
 
 }
