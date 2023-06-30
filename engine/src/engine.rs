@@ -258,7 +258,7 @@ fn sys_init_world(mut commands: Commands) {
     commands.spawn((
         Position::new_f32(0., 0.),
         Velocity::new_f32(0., 0.),
-        GravityEmitter::new(),
+        GravityEmitter,
         MovementReceiver::new(),
         Color::new(0, 0, 0, 255),
         DrawCircle::new(8.),
@@ -302,7 +302,7 @@ fn init_app() -> App {
 
 /// Determines if we are currently able to advance a tick, as opposed to waiting
 fn can_simulation_proceed(
-    tc: NonSend<TickCoordinator>,
+    _tc: NonSend<TickCoordinator>,
     sim_state: Res<State<SimulationState>>,
 ) -> bool {
     sim_state.0 == SimulationState::Running // && tc.is_next_tick_finalized()

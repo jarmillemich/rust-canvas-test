@@ -23,7 +23,7 @@ pub fn sys_renderer(
         let xx = pos.x;
         let yy = pos.y;
 
-        renderer.draw_test(
+        renderer.draw(
             xx.to_num::<f32>() + cx,
             yy.to_num::<f32>() + cy,
             circle.radius,

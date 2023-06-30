@@ -58,7 +58,7 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
     context.bind_vertex_array(Some(&vao));
 
     // Attach buffers to VAO
-    let position_buffer = attach_buffer(
+    attach_buffer(
         &context,
         position_attribute_location,
         2,
@@ -67,17 +67,13 @@ pub fn init_renderer(canvas: &web_sys::HtmlCanvasElement) -> Option<Renderer> {
         0,
         0,
     );
-    //let color_buffer = attach_buffer(&context, color_uniform_location, 4, WebGl2RenderingContext::FLOAT, true, 0, 0);
 
     Some(Renderer {
         context,
         program,
 
-        position_buffer,
-        //color_buffer,
         position_attribute_location,
         color_uniform_location,
-        resolution_uniform_location,
         center_uniform_location,
         radius_uniform_location,
         vao,
@@ -121,10 +117,8 @@ pub struct Renderer {
     // Shader attributes
     position_attribute_location: u32,
     color_uniform_location: WebGlUniformLocation,
-    resolution_uniform_location: WebGlUniformLocation,
     center_uniform_location: WebGlUniformLocation,
     radius_uniform_location: WebGlUniformLocation,
-    position_buffer: WebGlBuffer,
     vao: WebGlVertexArrayObject,
 }
 
@@ -149,33 +143,7 @@ fn write_to_buffer(context: &WebGl2RenderingContext, vertices: &[f32]) {
 }
 
 impl Renderer {
-    pub fn draw(&mut self, vertices: [f32; 6], color: [f32; 4]) {
-        let context = &self.context;
-
-        context.use_program(Some(&self.program));
-        context.bind_vertex_array(Some(&self.vao));
-
-        // Write to uniforms
-        context.uniform4fv_with_f32_array(Some(&self.color_uniform_location), &color);
-
-        // Write to vertices
-        // We may need to re-select the position buffer here, but for the moment we only have the one
-        write_to_buffer(context, &vertices);
-
-        context.enable_vertex_attrib_array(self.position_attribute_location);
-        context.vertex_attrib_pointer_with_i32(
-            self.position_attribute_location,
-            2,
-            WebGl2RenderingContext::FLOAT,
-            false,
-            0,
-            0,
-        );
-
-        context.draw_arrays(WebGl2RenderingContext::TRIANGLES, 0, 3);
-    }
-
-    pub fn draw_test(&mut self, x: f32, y: f32, radius: f32, color: [f32; 4]) {
+    pub fn draw(&mut self, x: f32, y: f32, radius: f32, color: [f32; 4]) {
         // Create our vertices
         let d = 1.414 * radius;
         let vertices = [x - d, y - d, x - d, y + d, x + d, y - d, x + d, y + d];

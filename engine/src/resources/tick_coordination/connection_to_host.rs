@@ -9,7 +9,7 @@ use wasm_bindgen::{
     prelude::{wasm_bindgen, Closure},
     JsCast,
 };
-use web_sys::{RtcDataChannel, RtcPeerConnection};
+use web_sys::RtcDataChannel;
 
 use crate::action::Action;
 
@@ -18,7 +18,6 @@ use super::{action_coordinator::ActionScheduler, tick_queue::TickQueue, types::N
 /// On the client side, a connection to the host
 #[wasm_bindgen]
 pub struct ConnectionToHost {
-    connection: RtcPeerConnection,
     channel: RtcDataChannel,
     action_send_buffer: Vec<Action>,
     message_receive_queue: Arc<Mutex<Vec<Vec<u8>>>>,
@@ -29,11 +28,10 @@ pub struct ConnectionToHost {
 #[wasm_bindgen]
 impl ConnectionToHost {
     #[wasm_bindgen(constructor)]
-    pub fn new(connection: RtcPeerConnection, channel: RtcDataChannel) -> Self {
+    pub fn new(channel: RtcDataChannel) -> Self {
         let message_receive_queue = Self::attach_message_queue(&channel);
 
         Self {
-            connection,
             channel,
             action_send_buffer: Vec::new(),
             message_receive_queue,

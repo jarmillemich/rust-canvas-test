@@ -18,7 +18,7 @@ impl ActionScheduler for ConnectionLoopback {
         queue.enqueue_action(action, queue.current_tick + 50);
     }
 
-    fn synchronize(&mut self, queue: &mut TickQueue, commands: Commands) {
+    fn synchronize(&mut self, queue: &mut TickQueue, _commands: Commands) {
         // Just finalize the next tick
         queue.finalize_tick(queue.current_tick + 1);
     }

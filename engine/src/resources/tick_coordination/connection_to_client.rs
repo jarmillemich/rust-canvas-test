@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use js_sys::Uint8Array;
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
-use web_sys::{RtcDataChannel, RtcPeerConnection};
+use web_sys::RtcDataChannel;
 
 use super::{tick_queue::TickQueue, types::NetworkMessage};
 
@@ -17,7 +17,6 @@ enum ConnectionState {
 /// On the host side, a connection to a client
 #[wasm_bindgen]
 pub struct ConnectionToClient {
-    connection: RtcPeerConnection,
     channel: RtcDataChannel,
     message_queue: Arc<Mutex<Vec<Vec<u8>>>>,
     last_sync_tick: usize,
@@ -27,11 +26,10 @@ pub struct ConnectionToClient {
 #[wasm_bindgen]
 impl ConnectionToClient {
     #[wasm_bindgen(constructor)]
-    pub fn new(connection: RtcPeerConnection, channel: RtcDataChannel) -> Self {
+    pub fn new(channel: RtcDataChannel) -> Self {
         let message_queue = Self::attach_message_queue(&channel);
 
         Self {
-            connection,
             channel,
             message_queue,
             last_sync_tick: 0,

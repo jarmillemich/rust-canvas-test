@@ -23,7 +23,7 @@ pub fn sys_fire_receive(
                     for i in 0..8 {
                         let theta = i as f32 * 2. * std::f32::consts::PI / 8.;
 
-                        let entity = commands.spawn((
+                        commands.spawn((
                             Position::new_f32(
                                 pos.x.to_num::<f32>() + 300. * f32::cos(theta),
                                 pos.y.to_num::<f32>() + 300. * f32::sin(theta),

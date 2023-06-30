@@ -9,8 +9,8 @@ pub fn sys_gravity(
     emitters: Query<(&Position, &GravityEmitter)>,
     mut receivers: Query<(&Position, &mut Velocity, &Gravity)>,
 ) {
-    for (gravity_position, gravity) in &emitters {
-        for (pos, mut vel, receiver) in &mut receivers {
+    for (gravity_position, _gravity) in &emitters {
+        for (pos, mut vel, _receiver) in &mut receivers {
             let dx = pos.x - gravity_position.x;
             let dy = pos.y - gravity_position.y;
 

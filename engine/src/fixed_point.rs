@@ -14,8 +14,10 @@ impl Serialize for FixedPoint {
     where
         S: serde::Serializer,
     {
+        use base64::{engine::general_purpose::STANDARD_NO_PAD as base64, Engine as _};
+
         let bytes = self.to_be_bytes();
-        let encoded = base64::encode(&bytes);
+        let encoded = base64.encode(bytes);
         serializer.serialize_str(encoded.as_str())
     }
 }
@@ -25,8 +27,10 @@ impl<'de> Deserialize<'de> for FixedPoint {
     where
         D: serde::Deserializer<'de>,
     {
+        use base64::{engine::general_purpose::STANDARD_NO_PAD as base64, Engine as _};
+
         let encoded = String::deserialize(deserializer)?;
-        let bytes = base64::decode(encoded.as_str()).unwrap();
+        let bytes = base64.decode(encoded.as_str()).unwrap();
         Ok(FixedPoint::from_be_bytes(bytes[0..8].try_into().unwrap()))
     }
 }
