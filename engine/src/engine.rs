@@ -140,8 +140,7 @@ impl Engine {
             scene: serialized,
             last_finalized_tick: lft,
         });
-        let serialized_message = flexbuffers::to_vec(vec![message]).unwrap();
-        client.send_message(serialized_message);
+        client.send_message(message);
 
         // Add to the session
         self.hosting_session
@@ -150,6 +149,9 @@ impl Engine {
             .lock()
             .unwrap()
             .add_client(client);
+
+        // TODO try this again later
+        //self.app.lock().unwrap().world.spawn((client));
     }
 
     /// Connects to a remote session as a client

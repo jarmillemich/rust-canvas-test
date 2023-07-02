@@ -5,8 +5,10 @@ use bevy::prelude::*;
 use crate::action::Action;
 
 use super::{
-    action_coordinator::ActionScheduler, connection_to_client::ConnectionToClient,
-    tick_queue::TickQueue, types::NetworkMessage,
+    action_coordinator::ActionScheduler,
+    connection_to_client::{ConnectionState, ConnectionToClient},
+    tick_queue::TickQueue,
+    types::NetworkMessage,
 };
 
 pub struct HostingSession {
@@ -38,6 +40,11 @@ impl ActionScheduler for HostingSession {
         for client in self.clients.lock().unwrap().iter_mut() {
             for message in client.take_current_messages() {
                 match message {
+                    NetworkMessage::RequestWorldLoad => {
+                        if matches!(client.get_state(), ConnectionState::InitialConnection) {
+                            client.set_state(ConnectionState::NeedsWorldLoad);
+                        }
+                    }
                     NetworkMessage::ScheduleAction { actions } => {
                         for action in actions {
                             queue.enqueue_action(action, queue.next_unfinalized_tick());

@@ -1,13 +1,13 @@
 use std::sync::{Arc, Mutex};
 
-use js_sys::Uint8Array;
-use serde::Deserialize;
+use super::{networking::NetworkChannel, tick_queue::TickQueue, types::NetworkMessage};
+use crate::resources::tick_coordination::networking::RtcNetworkChannel;
+use bevy::prelude::Component;
 use wasm_bindgen::prelude::*;
 use web_sys::RtcDataChannel;
 
-use super::{tick_queue::TickQueue, types::NetworkMessage};
-
-enum ConnectionState {
+pub enum ConnectionState {
+    InitialConnection,
     NeedsWorldLoad,
     CatchingUp,
     Connected,
@@ -16,9 +16,9 @@ enum ConnectionState {
 
 /// On the host side, a connection to a client
 #[wasm_bindgen]
+//#[derive(Component)]
 pub struct ConnectionToClient {
-    channel: RtcDataChannel,
-    message_queue: Arc<Mutex<Vec<Vec<u8>>>>,
+    channel: Arc<Mutex<Box<dyn NetworkChannel + Send>>>,
     last_sync_tick: usize,
     state: ConnectionState,
 }
@@ -27,32 +27,24 @@ pub struct ConnectionToClient {
 impl ConnectionToClient {
     #[wasm_bindgen(constructor)]
     pub fn new(channel: RtcDataChannel) -> Self {
-        let message_queue = Self::attach_message_queue(&channel);
+        let channel: Box<dyn NetworkChannel + Send> = Box::new(RtcNetworkChannel::new(channel));
+        let channel = Arc::new(Mutex::new(channel));
 
         Self {
             channel,
-            message_queue,
             last_sync_tick: 0,
-            state: ConnectionState::NeedsWorldLoad,
+            state: ConnectionState::InitialConnection,
         }
     }
 }
 
 impl ConnectionToClient {
-    /// Creates and attaches a message queue to the given data channel
-    fn attach_message_queue(channel: &RtcDataChannel) -> Arc<Mutex<Vec<Vec<u8>>>> {
-        let message_queue = Arc::new(Mutex::new(Vec::new()));
-        let message_queue_clone = message_queue.clone();
-        let on_message = Closure::wrap(Box::new(move |event: web_sys::MessageEvent| {
-            let mut lock = message_queue_clone.lock().unwrap();
-            let buffer = event.data();
-            let array = Uint8Array::new(&buffer);
-            let bytes = array.to_vec();
-            lock.push(bytes);
-        }) as Box<dyn FnMut(_)>);
-        channel.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
-        on_message.forget();
-        message_queue
+    pub fn get_state(&self) -> &ConnectionState {
+        &self.state
+    }
+
+    pub fn set_state(&mut self, state: ConnectionState) {
+        self.state = state;
     }
 
     pub fn set_sync(&mut self, tick: usize) {
@@ -60,36 +52,25 @@ impl ConnectionToClient {
     }
 
     pub fn take_current_messages(&mut self) -> Vec<NetworkMessage> {
-        let mut lock = self.message_queue.lock().unwrap();
-        let mut ret = Vec::new();
-        for message in lock.drain(..) {
-            let de = flexbuffers::Reader::get_root(message.as_slice())
-                .expect("Message from host should be a Flexbuffer");
-            let mut messages: Vec<NetworkMessage> = Deserialize::deserialize(de)
-                .expect("Message from host should be a Vec<NetworkMessage>");
-            ret.append(&mut messages);
-        }
-        ret
+        self.channel.lock().unwrap().drain()
     }
 
     pub fn synchronize_to_queue(&mut self, queue: &TickQueue) {
+        // Don't start sending ticks until the client is ready for them
+        if matches!(self.state, ConnectionState::InitialConnection) {
+            return;
+        }
+
         // Send all ticks between this clients last synced tick and the latest available finalized tick
         let (last_sync_tick, messages) =
             queue.make_tick_finalization_messages(self.last_sync_tick + 1);
         // Just kind of move things forward, we'll want to get ACKs from the client later
         self.last_sync_tick = last_sync_tick;
 
-        // Serialize messages
-        let serialized =
-            flexbuffers::to_vec(messages).expect("Messages should serialize to Flexbuffer");
-        self.channel
-            .send_with_u8_array(&serialized)
-            .expect("Should be able to send messages");
+        self.channel.lock().unwrap().send(messages.as_slice());
     }
 
-    pub fn send_message(&mut self, message: Vec<u8>) {
-        self.channel
-            .send_with_u8_array(&message)
-            .expect("Should be able to send messages");
+    pub fn send_message(&mut self, message: NetworkMessage) {
+        self.channel.lock().unwrap().send(&[message]);
     }
 }

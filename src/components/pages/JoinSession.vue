@@ -33,7 +33,7 @@ async function start_game() {
 
   // Establish a connection
   let { connection, channel } = await joinSession(sessionName.value, clientName.value)
-  let hostConnection = new ConnectionToHost(connection, channel)
+  let hostConnection = new ConnectionToHost(channel)
 
   connected.value = true
   await nextTick()

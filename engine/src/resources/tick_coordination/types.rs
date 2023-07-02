@@ -5,6 +5,9 @@ use crate::action::Action;
 
 #[derive(Serialize, Deserialize)]
 pub enum NetworkMessage {
+    /// Client->Server initial message to indicate readiness to receive the world
+    RequestWorldLoad,
+
     // Server->Client messages
     /// Initial world load
     World(WorldLoad),
