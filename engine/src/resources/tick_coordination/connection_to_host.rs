@@ -6,8 +6,6 @@ use super::{
 };
 use crate::action::Action;
 use bevy::prelude::*;
-use flexbuffers;
-use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 use web_sys::RtcDataChannel;
 
@@ -20,6 +18,7 @@ pub struct ConnectionToHost {
     has_received_world: bool,
 }
 
+/// TBU non-send resource
 #[wasm_bindgen]
 impl ConnectionToHost {
     #[wasm_bindgen(constructor)]

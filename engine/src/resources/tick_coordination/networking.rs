@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
@@ -14,15 +17,12 @@ pub trait NetworkChannel {
 }
 
 pub struct RtcNetworkChannel {
-    channel: RtcDataChannel,
+    channel_id: usize,
     message_queue: Arc<Mutex<Vec<NetworkMessage>>>,
 }
 
-// TODO we are single threaded but...
-unsafe impl Send for RtcNetworkChannel {}
-
 impl RtcNetworkChannel {
-    pub fn new(channel: RtcDataChannel) -> Self {
+    pub fn new(channel_id: RtcDataChannel) -> Self {
         let message_queue = Self::attach_message_queue(&channel);
 
         Self {
@@ -69,5 +69,35 @@ impl NetworkChannel for RtcNetworkChannel {
 
     fn drain(&mut self) -> Vec<NetworkMessage> {
         self.message_queue.lock().unwrap().drain(..).collect()
+    }
+}
+
+// Suppose we have a single non-send resource that owns our network channels
+// And other things will just have a id-reference to a particular channel
+struct ResChannelManager {
+    channels: HashMap<ChannelId, Box<RtcDataChannel>>,
+    last_id: ChannelId,
+}
+
+#[derive(Eq, PartialEq, Hash)]
+struct ChannelId(usize);
+
+impl ResChannelManager {
+    pub fn register_channel(&mut self, channel: RtcDataChannel) -> ChannelId {
+        let id = ChannelId(self.last_id.0 + 1);
+
+        assert!(self.channels.get(&id).is_none(), "Channel id collision");
+
+        self.channels.insert(id, Box::new(channel));
+
+        id
+    }
+
+    pub fn get_channel(&self, id: ChannelId) -> &RtcDataChannel {
+        self.channels.get(&id).unwrap()
+    }
+
+    pub fn get_channel_mut(&mut self, id: ChannelId) -> &mut RtcDataChannel {
+        self.channels.get_mut(&id).unwrap()
     }
 }

@@ -16,9 +16,10 @@ pub enum ConnectionState {
 
 /// On the host side, a connection to a client
 #[wasm_bindgen]
-//#[derive(Component)]
+#[derive(Component)]
 pub struct ConnectionToClient {
-    channel: Arc<Mutex<Box<dyn NetworkChannel + Send>>>,
+    //channel: Arc<Mutex<Box<dyn NetworkChannel + Send>>>,
+    channel_id: usize,
     last_sync_tick: usize,
     state: ConnectionState,
 }
