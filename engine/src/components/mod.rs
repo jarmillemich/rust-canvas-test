@@ -20,5 +20,5 @@ pub fn register_components(app: &mut App) {
         .register_type::<physics::Gravity>()
         .register_type::<physics::GravityEmitter>()
         .register_type::<physics::MovementReceiver>()
-        .register_type::<crate::action::Direction>();
+        .register_type::<crate::core::scheduling::Direction>();
 }

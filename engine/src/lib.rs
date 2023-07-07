@@ -4,15 +4,16 @@ extern crate custom_derive;
 extern crate newtype_derive;
 
 // Types
-mod action;
 mod fixed_point;
-mod input;
 
 // ECS
 mod components;
 mod resources;
 mod systems;
 mod utils;
+
+// Modules
+mod core;
 
 // Web
 use wasm_bindgen::prelude::*;

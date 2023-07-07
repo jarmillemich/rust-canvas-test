@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use bevy::{
     prelude::{AppTypeRegistry, Assets, World, *},
     scene::{serde::SceneDeserializer, DynamicScene, DynamicSceneBundle},
@@ -7,12 +5,43 @@ use bevy::{
 use serde::de::DeserializeSeed;
 
 use crate::{
-    engine::SimulationState,
-    resources::{
-        tick_coordination::{connection_to_host::ConnectionToHost, types::WorldLoad},
-        TickCoordinator,
+    core::{
+        networking::WorldLoad,
+        scheduling::{ResActionQueue, ResTickQueue},
     },
+    engine::SimulationState,
 };
+
+use super::{ChannelId, NetworkMessage, ResNetworkQueue};
+
+pub fn sys_client_scheduler(
+    mut action_queue: ResMut<ResActionQueue>,
+    mut network_queue: ResMut<ResNetworkQueue>,
+    mut tick_queue: ResMut<ResTickQueue>,
+) {
+    // TODO
+    // 1. Drain all actions from the action queue
+    // 2. Wrap in a NetworkMessage::ScheduleActions
+    // 3. Send to the host
+    // 4. Receive NetworkMessage::FinalizedTick
+    // 5. Add finalized actions to the tick queue
+}
+
+/// Keeps track of our channel to the current host
+#[derive(Resource)]
+pub struct ConnectionToHost {
+    pub channel_id: ChannelId,
+    buffered_messages: Vec<NetworkMessage>,
+}
+
+impl ConnectionToHost {
+    pub fn new(channel_id: ChannelId) -> Self {
+        Self {
+            channel_id,
+            buffered_messages: Vec::new(),
+        }
+    }
+}
 
 #[derive(States, PartialEq, Debug, Clone, Hash, Default, Eq)]
 pub enum ClientJoinState {
@@ -69,9 +98,7 @@ fn sys_try_load_world(world: &mut World) {
     });
 
     // Align tick coordination
-    let mut tc = world
-        .get_non_send_resource_mut::<TickCoordinator>()
-        .unwrap();
+    let mut tc = world.get_non_send_resource_mut::<ResTickQueue>().unwrap();
     tc.set_last_finalized_tick(world_load.last_finalized_tick);
 
     // Remove this once we are done
@@ -91,11 +118,9 @@ fn sys_try_load_world(world: &mut World) {
 
     // Let our connection know it can let buffered ticks through
     world
-        .get_non_send_resource_mut::<Arc<Mutex<ConnectionToHost>>>()
+        .get_resource_mut::<NextState<ClientJoinState>>()
         .unwrap()
-        .lock()
-        .unwrap()
-        .mark_world_received();
+        .set(ClientJoinState::Connected);
 
     web_sys::console::log_1(
         &format!(

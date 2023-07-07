@@ -1,5 +1,6 @@
 use super::Velocity;
-use crate::{action::Direction, fixed_point::FixedPoint};
+use crate::core::scheduling::Direction;
+use crate::fixed_point::FixedPoint;
 use bevy::prelude::*;
 
 /// TODO Testing receiving actions to a VelocityComponent

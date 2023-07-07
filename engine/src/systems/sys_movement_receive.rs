@@ -1,12 +1,11 @@
 use crate::{
-    action::Action,
     components::physics::{MovementReceiver, Velocity},
-    resources::TickCoordinator,
+    core::scheduling::{Action, ResTickQueue},
 };
 use bevy::prelude::*;
 
 pub fn sys_movement_receive(
-    tc: NonSend<TickCoordinator>,
+    tc: Res<ResTickQueue>,
     mut query: Query<(&mut MovementReceiver, &mut Velocity)>,
 ) {
     for action in tc.current_tick_actions() {

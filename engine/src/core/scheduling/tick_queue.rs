@@ -1,7 +1,8 @@
-use super::types::NetworkMessage;
-use crate::action::Action;
+use bevy::prelude::Resource;
 
-// XXX cheating
+use super::Action;
+use crate::core::networking::NetworkMessage;
+
 const ACTION_QUEUE_SLOTS: usize = 256;
 
 enum QueueSlotState {
@@ -33,7 +34,8 @@ impl QueueSlot {
     }
 }
 
-pub struct TickQueue {
+#[derive(Resource)]
+pub struct ResTickQueue {
     /// The current simulation tick
     pub current_tick: usize,
 
@@ -44,13 +46,13 @@ pub struct TickQueue {
     action_queue: [QueueSlot; ACTION_QUEUE_SLOTS],
 }
 
-impl Default for TickQueue {
+impl Default for ResTickQueue {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TickQueue {
+impl ResTickQueue {
     pub fn new() -> Self {
         const EMPTY_SLOT: QueueSlot = QueueSlot {
             state: QueueSlotState::Pending,
@@ -129,6 +131,11 @@ impl TickQueue {
     /// Retrieves the queue slot for the current tick, exclusively
     fn current_queue_slot(&mut self) -> &mut QueueSlot {
         self.queue_slot_at(self.current_tick)
+    }
+
+    /// Enqueue an action in the next possible tick
+    pub fn enqueue_action_immediately(&mut self, action: Action) {
+        self.enqueue_action(action, self.last_finalized_tick + 1);
     }
 
     pub fn enqueue_action(&mut self, action: Action, tick: usize) {
@@ -247,9 +254,9 @@ impl TickQueue {
 
 #[test]
 fn basic_test() {
-    use crate::action::Direction;
+    use crate::core::scheduling::Direction;
 
-    let mut queue = TickQueue::new();
+    let mut queue = ResTickQueue::new();
 
     assert_eq!(queue.current_tick, 0, "Tick queue should start at tick 0");
 

@@ -48,6 +48,7 @@
 			"onicecandidate",
 			"saveload",
 			"smoothstep",
+			"transceive",
 			"unfinalized",
 			"webgl"
 		],

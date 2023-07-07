@@ -1,10 +1,9 @@
 use crate::{
-    action::Action,
     components::{
         graphics::{Color, DrawCircle},
         physics::{Gravity, MovementReceiver, Position, Velocity},
     },
-    resources::TickCoordinator,
+    core::scheduling::{Action, ResTickQueue},
 };
 use bevy::prelude::*;
 use web_sys::console;
@@ -12,7 +11,7 @@ use web_sys::console;
 pub fn sys_fire_receive(
     world: &World,
     mut commands: Commands,
-    tc: NonSend<TickCoordinator>,
+    tc: Res<ResTickQueue>,
     query: Query<(&MovementReceiver, &Position)>,
 ) {
     for action in tc.current_tick_actions() {

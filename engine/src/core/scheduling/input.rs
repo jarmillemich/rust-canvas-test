@@ -3,9 +3,11 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bevy::prelude::Resource;
+use bevy::prelude::{Res, ResMut, Resource};
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*};
 use web_sys::{EventTarget, HtmlCanvasElement};
+
+use super::{Action, Direction, ResActionQueue};
 
 #[allow(unused)]
 pub enum InputEvent {
@@ -22,12 +24,12 @@ pub enum InputEvent {
 /// Structure to forward events from JS-land to Rust-land
 #[wasm_bindgen]
 #[derive(Default, Resource)]
-pub struct EventQueue {
+pub struct ResEventQueue {
     queue: Arc<Mutex<VecDeque<InputEvent>>>,
 }
 
 #[wasm_bindgen]
-impl EventQueue {
+impl ResEventQueue {
     pub fn new() -> Self {
         Self {
             queue: Arc::new(Mutex::new(VecDeque::new())),
@@ -35,7 +37,7 @@ impl EventQueue {
     }
 
     pub fn new_with_canvas(el: &HtmlCanvasElement) -> Self {
-        let queue = EventQueue::new();
+        let queue = ResEventQueue::new();
         queue.attach(el);
         queue
     }
@@ -92,8 +94,49 @@ impl EventQueue {
     }
 }
 
-impl EventQueue {
+impl ResEventQueue {
     pub fn items(&self) -> &Arc<Mutex<VecDeque<InputEvent>>> {
         &self.queue
+    }
+}
+
+pub fn sys_input(mut action_queue: ResMut<ResActionQueue>, event_queue: Res<ResEventQueue>) {
+    // TODO does this keep the lock for the entire loop?
+    for event in event_queue.items().lock().unwrap().drain(..) {
+        let action: Action = match event {
+            InputEvent::KeyDown { key } => match key.as_str() {
+                "w" => Action::StartMoving { dir: Direction::Up },
+                "a" => Action::StartMoving {
+                    dir: Direction::Left,
+                },
+                "s" => Action::StartMoving {
+                    dir: Direction::Down,
+                },
+                "d" => Action::StartMoving {
+                    dir: Direction::Right,
+                },
+                " " => Action::Fire,
+                _ => continue,
+            },
+
+            InputEvent::KeyUp { key } => match key.as_str() {
+                "w" => Action::StopMoving { dir: Direction::Up },
+                "a" => Action::StopMoving {
+                    dir: Direction::Left,
+                },
+                "s" => Action::StopMoving {
+                    dir: Direction::Down,
+                },
+                "d" => Action::StopMoving {
+                    dir: Direction::Right,
+                },
+                _ => continue,
+            },
+            // Ignore unhandled events
+            _ => continue,
+        };
+
+        // Request that the action be scheduled
+        action_queue.add_action(action);
     }
 }

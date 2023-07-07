@@ -4,6 +4,7 @@ use crate::{action::Action, resources::tick_coordination::tick_queue::TickQueue}
 
 use super::action_coordinator::ActionScheduler;
 
+#[derive(Resource)]
 pub struct ConnectionLoopback {}
 
 impl ConnectionLoopback {

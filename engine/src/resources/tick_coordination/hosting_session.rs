@@ -11,6 +11,7 @@ use super::{
     types::NetworkMessage,
 };
 
+#[derive(Resource)]
 pub struct HostingSession {
     clients: Mutex<Vec<ConnectionToClient>>,
 }

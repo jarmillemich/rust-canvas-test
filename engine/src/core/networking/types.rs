@@ -1,10 +1,16 @@
 use bevy::prelude::Resource;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::action::Action;
+use crate::core::scheduling::Action;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub enum NetworkMessage {
+    /// Request a Pong message
+    Ping(usize),
+
+    /// Respond to a Ping message
+    Pong(usize),
+
     /// Client->Server initial message to indicate readiness to receive the world
     RequestWorldLoad,
 
@@ -22,8 +28,10 @@ pub enum NetworkMessage {
     ScheduleAction { actions: Vec<Action> },
 }
 
-#[derive(Serialize, Deserialize, Resource)]
+#[derive(Serialize, Deserialize, Resource, Debug, Eq, PartialEq)]
 pub struct WorldLoad {
+    /// Serialized DynamicScene
     pub scene: Vec<u8>,
+    /// Last tick that has processed as of scene being serialized
     pub last_finalized_tick: usize,
 }

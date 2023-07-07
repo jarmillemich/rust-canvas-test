@@ -13,30 +13,25 @@ use crate::{
         graphics::{Color, DrawCircle},
         physics::{Gravity, GravityEmitter, MovementReceiver, Position, Velocity},
     },
-    input::EventQueue,
-    renderer::init_renderer,
-    resources::tick_coordination::{
-        connection_loopback::ConnectionLoopback,
-        connection_to_client::ConnectionToClient,
-        connection_to_host::ConnectionToHost,
-        hosting_session::HostingSession,
-        res_tick_coordinator::TickCoordinator,
-        types::{NetworkMessage, WorldLoad},
+    core::{
+        networking::{
+            channels::ResChannelManager, ChannelId, ClientConnection, ConnectionToHost,
+            NetworkMessage, RtcNetworkChannel, WorldLoad,
+        },
+        scheduling::{CoordinationState, ResEventQueue, ResTickQueue},
     },
+    renderer::init_renderer,
     systems,
 };
 use bevy::{prelude::*, scene::ScenePlugin};
+use futures::channel::oneshot::channel;
 use wasm_bindgen::{prelude::*, JsCast};
-use web_sys::HtmlCanvasElement;
+use web_sys::{HtmlCanvasElement, RtcDataChannel};
 
 #[wasm_bindgen(js_name = Engine)]
 pub struct Engine {
     is_running: Arc<AtomicBool>,
     app: Arc<Mutex<App>>,
-    // TODO perhaps make an enum out of this
-    loopback_session: Option<Arc<Mutex<ConnectionLoopback>>>,
-    hosting_session: Option<Arc<Mutex<HostingSession>>>,
-    client_session: Option<Arc<Mutex<ConnectionToHost>>>,
 }
 
 // TESTING
@@ -64,12 +59,28 @@ fn request_animation_frame(f: &Closure<dyn FnMut()>) {
 
 #[wasm_bindgen(js_class = Engine)]
 impl Engine {
+    fn get_coord_state(&self) -> CoordinationState {
+        let app = self.app.lock().unwrap();
+        let world = &app.world;
+
+        let coord_state = world.get_resource::<State<CoordinationState>>().unwrap();
+
+        coord_state.0.clone()
+    }
+
+    fn set_coord_state(&self, state: CoordinationState) {
+        let mut app = self.app.lock().unwrap();
+
+        app.world
+            .get_resource_mut::<NextState<CoordinationState>>()
+            .unwrap()
+            .set(state)
+    }
+
     /// Asserts that we have not already started a session
     fn assert_not_connected(&self) {
         assert!(
-            self.loopback_session.is_none()
-                && self.hosting_session.is_none()
-                && self.client_session.is_none(),
+            matches!(self.get_coord_state(), CoordinationState::Disconnected),
             "Already connected"
         );
     }
@@ -78,30 +89,29 @@ impl Engine {
     pub fn connect_local(&mut self) {
         self.assert_not_connected();
         let mut app = self.app.lock().unwrap();
-        let loopback = Arc::new(Mutex::new(ConnectionLoopback::new()));
-        self.loopback_session = Some(loopback.clone());
-        app.insert_non_send_resource(TickCoordinator::new(loopback))
-            .add_startup_system(sys_init_world);
+
+        app.add_startup_system(sys_init_world);
 
         app.world
             .get_resource_mut::<NextState<SimulationState>>()
             .unwrap()
             .set(SimulationState::Running);
+
+        self.set_coord_state(CoordinationState::ConnectedLocal);
     }
 
     /// Starts a hosting session that others can join
     pub fn connect_as_host(&mut self) {
         self.assert_not_connected();
         let mut app = self.app.lock().unwrap();
-        let session = Arc::new(Mutex::new(HostingSession::new()));
-        self.hosting_session = Some(session.clone());
-        app.insert_non_send_resource(TickCoordinator::new(session))
-            .add_startup_system(sys_init_world);
+        app.add_startup_system(sys_init_world);
 
         app.world
             .get_resource_mut::<NextState<SimulationState>>()
             .unwrap()
             .set(SimulationState::Running);
+
+        self.set_coord_state(CoordinationState::Hosting);
     }
 
     /// Serializes the world, e.g. to send to a newly connected client
@@ -118,53 +128,41 @@ impl Engine {
         serialized.into_bytes()
     }
 
+    fn register_channel(&self, connection: RtcDataChannel) -> ChannelId {
+        let mut app = self.app.lock().unwrap();
+        let mut channel_manager = app
+            .world
+            .get_non_send_resource_mut::<ResChannelManager>()
+            .unwrap();
+        let channel = RtcNetworkChannel::new(connection);
+        channel_manager.register_channel(Box::new(channel))
+    }
+
     /// Adds a new client to a hosting session
-    pub fn add_client_as_host(&self, mut client: ConnectionToClient) {
+    pub fn add_client_as_host(&self, mut connection: RtcDataChannel) {
         assert!(
-            self.hosting_session.is_some(),
+            matches!(self.get_coord_state(), CoordinationState::Hosting),
             "Must be hosting to accept clients"
         );
 
-        let lft = self
-            .app
-            .lock()
-            .unwrap()
-            .world
-            .get_non_send_resource::<TickCoordinator>()
-            .unwrap()
-            .get_last_finalized_tick();
-        client.set_sync(lft);
-
-        let serialized = self.serialize_world();
-        let message = NetworkMessage::World(WorldLoad {
-            scene: serialized,
-            last_finalized_tick: lft,
-        });
-        client.send_message(message);
-
         // Add to the session
-        self.hosting_session
-            .as_ref()
-            .expect("Must have hosting session to add client")
-            .lock()
-            .unwrap()
-            .add_client(client);
-
-        // TODO try this again later
-        //self.app.lock().unwrap().world.spawn((client));
+        let channel_id = self.register_channel(connection);
+        let client_connection = ClientConnection::new(channel_id);
+        self.app.lock().unwrap().world.spawn((client_connection,));
     }
 
     /// Connects to a remote session as a client
-    pub fn connect_as_client(&mut self, connection: ConnectionToHost) {
+    pub fn connect_as_client(&mut self, connection: RtcDataChannel) {
         self.assert_not_connected();
-        {
-            let mut app = self.app.lock().unwrap();
-            let client = Arc::new(Mutex::new(connection));
-            self.client_session = Some(client.clone());
-            app.insert_non_send_resource(TickCoordinator::new(client.clone()));
-            app.insert_non_send_resource(client);
+        self.set_coord_state(CoordinationState::ConnectedToHost);
 
-            use systems::set_client_connection::ClientJoinState;
+        {
+            let channel_id = self.register_channel(connection);
+            let client = ConnectionToHost::new(channel_id);
+            let mut app = self.app.lock().unwrap();
+            app.insert_resource(client);
+
+            use crate::core::networking::ClientJoinState;
             app.world
                 .get_resource_mut::<NextState<ClientJoinState>>()
                 .unwrap()
@@ -185,12 +183,6 @@ impl Engine {
         Self {
             is_running: Arc::new(AtomicBool::new(false)),
             app: Arc::new(Mutex::new(init_app())),
-            //event_queue: Arc::new(Mutex::new(EventQueue::new()))
-            //event_queue: EventQueue::new(),
-            //dispatcher: Arc::new(init_dispatcher())
-            loopback_session: None,
-            hosting_session: None,
-            client_session: None,
         }
     }
 
@@ -198,9 +190,9 @@ impl Engine {
         let mut app = self.app.lock().unwrap();
         // Add resources
         app.insert_non_send_resource(init_renderer(canvas).unwrap())
-            .insert_resource(EventQueue::new_with_canvas(canvas))
+            .insert_resource(ResEventQueue::new_with_canvas(canvas))
             .add_system(systems::sys_renderer)
-            .add_system(systems::sys_input);
+            .add_system(crate::core::scheduling::sys_input);
     }
 
     fn tick(&self) {
@@ -287,10 +279,9 @@ fn init_app() -> App {
     );
 
     // Register systems
-    app.add_systems(sim_systems.distributive_run_if(can_simulation_proceed))
-        .add_system(systems::sys_tick_coordination);
+    app.add_systems(sim_systems.distributive_run_if(can_simulation_proceed));
 
-    systems::setup_systems(&mut app);
+    crate::core::networking::attach_to_app(&mut app);
 
     // Eh
     app.add_plugin(AssetPlugin { ..default() })
@@ -304,7 +295,7 @@ fn init_app() -> App {
 
 /// Determines if we are currently able to advance a tick, as opposed to waiting
 fn can_simulation_proceed(
-    _tc: NonSend<TickCoordinator>,
+    _tc: NonSend<ResTickQueue>,
     sim_state: Res<State<SimulationState>>,
 ) -> bool {
     sim_state.0 == SimulationState::Running // && tc.is_next_tick_finalized()
