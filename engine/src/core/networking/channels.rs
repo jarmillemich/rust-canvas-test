@@ -3,12 +3,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use bevy::prelude::{ResMut, NonSendMut};
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::RtcDataChannel;
 
-use super::types::NetworkMessage;
+use super::{types::NetworkMessage, ResNetworkQueue};
 
 /// An abstraction around some channel that we can transceive NetworkMessages on
 pub trait NetworkChannel {
@@ -74,6 +75,7 @@ impl NetworkChannel for RtcNetworkChannel {
 
 // Suppose we have a single non-send resource that owns our network channels
 // And other things will just have a id-reference to a particular channel
+#[derive(Default)]
 pub struct ResChannelManager {
     channels: HashMap<ChannelId, Box<dyn NetworkChannel>>,
     last_id: usize,
@@ -106,6 +108,16 @@ impl ResChannelManager {
         &mut self,
     ) -> impl Iterator<Item = (&ChannelId, &mut Box<dyn NetworkChannel>)> {
         self.channels.iter_mut()
+    }
+}
+
+pub fn sys_network_comms(
+    mut channel_manager: NonSendMut<ResChannelManager>,
+    mut network_queue: ResMut<ResNetworkQueue>,
+) {
+    for (channel_id, channel) in channel_manager.iter_channels_mut() {
+        let messages = channel.drain();
+        network_queue.on_messages(*channel_id, messages);
     }
 }
 

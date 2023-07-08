@@ -25,7 +25,7 @@ pub enum NetworkMessage {
 
     // Client->Server messages
     /// Client sends this message to the server to indicate that it wants to have an action scheduled
-    ScheduleAction { actions: Vec<Action> },
+    ScheduleActions { actions: Vec<Action> },
 }
 
 #[derive(Serialize, Deserialize, Resource, Debug, Eq, PartialEq)]

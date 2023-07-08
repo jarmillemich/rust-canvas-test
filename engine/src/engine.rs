@@ -63,7 +63,9 @@ impl Engine {
         let app = self.app.lock().unwrap();
         let world = &app.world;
 
-        let coord_state = world.get_resource::<State<CoordinationState>>().unwrap();
+        let coord_state = world
+            .get_resource::<State<CoordinationState>>()
+            .expect("Should have a CoordinationState resource");
 
         coord_state.0.clone()
     }
@@ -88,14 +90,16 @@ impl Engine {
     /// Starts a local session
     pub fn connect_local(&mut self) {
         self.assert_not_connected();
-        let mut app = self.app.lock().unwrap();
+        {
+            let mut app = self.app.lock().unwrap();
 
-        app.add_startup_system(sys_init_world);
+            app.add_startup_system(sys_init_world);
 
-        app.world
-            .get_resource_mut::<NextState<SimulationState>>()
-            .unwrap()
-            .set(SimulationState::Running);
+            app.world
+                .get_resource_mut::<NextState<SimulationState>>()
+                .unwrap()
+                .set(SimulationState::Running);
+        }
 
         self.set_coord_state(CoordinationState::ConnectedLocal);
     }
@@ -266,6 +270,13 @@ pub enum SimulationState {
     Running,
 }
 
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+enum SimulationSet {
+    BeforeTick,
+    Tick,
+    AfterTick,
+}
+
 fn init_app() -> App {
     let mut app = App::new();
 
@@ -279,11 +290,26 @@ fn init_app() -> App {
     );
 
     // Register systems
-    app.add_systems(sim_systems.distributive_run_if(can_simulation_proceed));
+    app.add_systems(sim_systems.in_set(SimulationSet::Tick));
+    app.add_system(sys_consume_tick.in_set(SimulationSet::AfterTick));
 
+    app.configure_set(SimulationSet::BeforeTick.run_if(can_simulation_proceed));
+    app.configure_set(SimulationSet::Tick.run_if(can_simulation_proceed));
+    app.configure_set(SimulationSet::AfterTick.run_if(can_simulation_proceed));
+    app.configure_sets(
+        (
+            SimulationSet::BeforeTick,
+            SimulationSet::Tick,
+            SimulationSet::AfterTick,
+        )
+            .chain(),
+    );
+
+    // Attach our modules
     crate::core::networking::attach_to_app(&mut app);
+    crate::core::scheduling::attach_to_app(&mut app);
 
-    // Eh
+    // Needed for loading a DynamicScene, i.e. from a RON stream
     app.add_plugin(AssetPlugin { ..default() })
         .add_plugin(ScenePlugin);
 
@@ -293,10 +319,11 @@ fn init_app() -> App {
     app
 }
 
+fn sys_consume_tick(mut tc: ResMut<ResTickQueue>) {
+    tc.advance();
+}
+
 /// Determines if we are currently able to advance a tick, as opposed to waiting
-fn can_simulation_proceed(
-    _tc: NonSend<ResTickQueue>,
-    sim_state: Res<State<SimulationState>>,
-) -> bool {
-    sim_state.0 == SimulationState::Running // && tc.is_next_tick_finalized()
+fn can_simulation_proceed(tc: Res<ResTickQueue>, sim_state: Res<State<SimulationState>>) -> bool {
+    sim_state.0 == SimulationState::Running && tc.is_next_tick_finalized()
 }

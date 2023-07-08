@@ -1,4 +1,4 @@
-use bevy::prelude::{ResMut, Resource, States};
+use bevy::prelude::{in_state, App, IntoSystemConfig, ResMut, Resource, States};
 
 pub mod input;
 pub use input::*;
@@ -16,9 +16,8 @@ pub fn sys_local_scheduler(
     // 1. Schedule everything immediately
     // 2. That's all!
 
-    for action in action_queue.take_queue() {
-        tick_queue.enqueue_action_immediately(action);
-    }
+    let next_tick = tick_queue.next_unfinalized_tick();
+    tick_queue.finalize_tick_with_actions(next_tick, action_queue.take_queue());
 }
 
 #[derive(States, Debug, Default, Hash, PartialEq, Eq, Clone)]
@@ -44,4 +43,11 @@ impl ResActionQueue {
         // TODO probably churning this every frame is hilariously inefficient
         std::mem::take(&mut self.queue)
     }
+}
+
+pub fn attach_to_app(app: &mut App) {
+    app.insert_resource(ResActionQueue::default())
+        .insert_resource(ResTickQueue::default())
+        .add_state::<CoordinationState>()
+        .add_system(sys_local_scheduler.run_if(in_state(CoordinationState::ConnectedLocal)));
 }

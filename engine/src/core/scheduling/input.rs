@@ -55,6 +55,11 @@ impl ResEventQueue {
             &el.owner_document().unwrap(),
             "keydown",
             |queue, event: web_sys::KeyboardEvent| {
+                // Ignore repetitions
+                if event.repeat() {
+                    return;
+                }
+
                 queue
                     .lock()
                     .unwrap()

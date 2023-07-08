@@ -1,4 +1,4 @@
-use bevy::prelude::{Component, NonSendMut, ResMut, Resource};
+use bevy::prelude::{Component, NonSendMut, ResMut, Resource, App};
 use std::collections::HashMap;
 
 pub mod types;
@@ -21,9 +21,9 @@ pub struct ResNetworkQueue {
 
 // Sending
 impl ResNetworkQueue {
-    pub fn send(&mut self, channel_id: ChannelId, message: NetworkMessage) {
+    pub fn send(&mut self, channel_id: &ChannelId, message: NetworkMessage) {
         self.outbound_queue
-            .entry(channel_id)
+            .entry(*channel_id)
             .or_default()
             .push(message);
     }
@@ -109,4 +109,12 @@ impl ClientConnection {
     pub fn new(channel_id: ChannelId) -> Self {
         Self { channel_id }
     }
+}
+
+pub fn attach_to_app(app: &mut App) {
+    self::set_client_connection::attach_to_app(app);
+
+    app.insert_resource(ResNetworkQueue::default())
+        .insert_non_send_resource(ResChannelManager::default())
+        .add_system(sys_network_comms);
 }

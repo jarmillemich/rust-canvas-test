@@ -7,7 +7,7 @@ use serde::de::DeserializeSeed;
 use crate::{
     core::{
         networking::WorldLoad,
-        scheduling::{ResActionQueue, ResTickQueue},
+        scheduling::{CoordinationState, ResActionQueue, ResTickQueue},
     },
     engine::SimulationState,
 };
@@ -18,13 +18,47 @@ pub fn sys_client_scheduler(
     mut action_queue: ResMut<ResActionQueue>,
     mut network_queue: ResMut<ResNetworkQueue>,
     mut tick_queue: ResMut<ResTickQueue>,
+    mut connection_to_host: ResMut<ConnectionToHost>,
+    join_state: Res<State<ClientJoinState>>,
 ) {
-    // TODO
     // 1. Drain all actions from the action queue
     // 2. Wrap in a NetworkMessage::ScheduleActions
     // 3. Send to the host
     // 4. Receive NetworkMessage::FinalizedTick
     // 5. Add finalized actions to the tick queue
+
+    let channel_id = &connection_to_host.channel_id;
+
+    let actions = action_queue.take_queue();
+    if !actions.is_empty() {
+        network_queue.send(channel_id, NetworkMessage::ScheduleActions { actions });
+    }
+
+    let finalized_ticks = network_queue.take_inbound(channel_id, |msg| {
+        matches!(msg, NetworkMessage::FinalizedTick { .. })
+    });
+
+    // Possible buffer messages instead?
+    match join_state.0 {
+        ClientJoinState::NonClient => {
+            panic!("Non client but running client scheduler")
+        }
+        ClientJoinState::WaitingForWorld => {
+            // Buffer
+            connection_to_host.buffered_messages.extend(finalized_ticks);
+        }
+        ClientJoinState::CatchingUp | ClientJoinState::Connected => {
+            // Play received messages and any buffered messages
+            for msg in finalized_ticks
+                .into_iter()
+                .chain(connection_to_host.buffered_messages.drain(..))
+            {
+                if let NetworkMessage::FinalizedTick { tick, actions } = msg {
+                    tick_queue.finalize_tick_with_actions(tick, actions);
+                }
+            }
+        }
+    }
 }
 
 /// Keeps track of our channel to the current host
@@ -132,11 +166,13 @@ fn sys_try_load_world(world: &mut World) {
 }
 
 pub fn attach_to_app(app: &mut App) {
-    app.add_state::<ClientJoinState>().add_system(
-        sys_try_load_world.run_if(
-            state_exists::<ClientJoinState>()
-                .and_then(in_state(ClientJoinState::WaitingForWorld))
-                .and_then(resource_exists::<WorldLoad>()),
-        ),
-    );
+    app.add_state::<ClientJoinState>()
+        .add_system(
+            sys_try_load_world.run_if(
+                state_exists::<ClientJoinState>()
+                    .and_then(in_state(ClientJoinState::WaitingForWorld))
+                    .and_then(resource_exists::<WorldLoad>()),
+            ),
+        )
+        .add_system(sys_client_scheduler.run_if(in_state(CoordinationState::ConnectedToHost)));
 }
