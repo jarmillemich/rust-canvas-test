@@ -8,7 +8,6 @@ mod fixed_point;
 
 // ECS
 mod components;
-mod resources;
 mod systems;
 mod utils;
 
