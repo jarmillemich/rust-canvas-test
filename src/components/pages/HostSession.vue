@@ -6,7 +6,7 @@
 
 <script lang="ts" setup>
 import { useRtcHelper } from '@/usables/useRtcHelper';
-import { ConnectionToClient, Engine, init } from '@engine/canvas_test';
+import { Engine, init } from '@engine/canvas_test';
 import { onMounted, onUnmounted, ref } from 'vue';
 
 let { startHostingSession } = useRtcHelper()
@@ -18,8 +18,7 @@ let engine: Engine
 startHostingSession(async ({ connection, channel }) => {
   if (!engine) throw new Error('No engine yet?')
 
-  let client = new ConnectionToClient(channel)
-  engine.add_client_as_host(client)
+  engine.add_client_as_host(channel)
 
   console.log('Client connected')
 })

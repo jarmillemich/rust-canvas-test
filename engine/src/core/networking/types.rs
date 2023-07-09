@@ -3,7 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::core::scheduling::Action;
 
-#[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Clone)]
 pub enum NetworkMessage {
     /// Request a Pong message
     Ping(usize),
@@ -28,7 +28,7 @@ pub enum NetworkMessage {
     ScheduleActions { actions: Vec<Action> },
 }
 
-#[derive(Serialize, Deserialize, Resource, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Resource, Debug, Eq, PartialEq, Clone)]
 pub struct WorldLoad {
     /// Serialized DynamicScene
     pub scene: Vec<u8>,

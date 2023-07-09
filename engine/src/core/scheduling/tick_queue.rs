@@ -138,6 +138,10 @@ impl ResTickQueue {
         self.enqueue_action(action, self.last_finalized_tick + 1);
     }
 
+    pub fn enqueue_actions_immediately(&mut self, actions: Vec<Action>) {
+        self.enqueue_actions(actions, self.last_finalized_tick + 1);
+    }
+
     pub fn enqueue_action(&mut self, action: Action, tick: usize) {
         assert!(
             tick > self.current_tick,
@@ -148,15 +152,17 @@ impl ResTickQueue {
         self.queue_slot_at(tick).actions.push(action);
     }
 
-    pub fn finalize_tick(&mut self, tick: usize) {
-        // web_sys::console::log_1(
-        //     &format!(
-        //         "Finalizing tick {}, last finalized {}",
-        //         tick, self.last_finalized_tick
-        //     )
-        //     .into(),
-        // );
+    pub fn enqueue_actions(&mut self, actions: Vec<Action>, tick: usize) {
+        assert!(
+            tick > self.current_tick,
+            "Attempted to enqueue an action at past tick {tick}, currently at {}",
+            self.current_tick
+        );
 
+        self.queue_slot_at(tick).actions.extend(actions);
+    }
+
+    pub fn finalize_tick(&mut self, tick: usize) {
         let slot = self.queue_slot_at(tick);
 
         // Should not finalize an already finalized tick
@@ -239,13 +245,16 @@ impl ResTickQueue {
 
         for tick in from_tick..=self.last_finalized_tick {
             let slot = self.peek_queue_slot_at(tick);
+            assert!(
+                slot.is_finalized(),
+                "Slot at tick {} is not finalized",
+                tick
+            );
 
-            if slot.is_finalized() {
-                messages.push(NetworkMessage::FinalizedTick {
-                    tick,
-                    actions: slot.actions.clone(),
-                });
-            }
+            messages.push(NetworkMessage::FinalizedTick {
+                tick,
+                actions: slot.actions.clone(),
+            });
         }
 
         (self.last_finalized_tick, messages)

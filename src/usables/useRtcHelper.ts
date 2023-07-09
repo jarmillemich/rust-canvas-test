@@ -9,11 +9,14 @@ export function useRtcHelper() {
 
 const stunUrl = 'stun:stun3.l.google.com:19302'
 const signallingUrl = 'https://jarmillemich-rust-signaling.fermyon.app'
+const debug = location.hash.includes('rtc-debug')
 
 function log(msg: string | ArrayBuffer) {
-  console.log(`[RTC] ${msg}`)
-  if (msg instanceof ArrayBuffer) {
-    console.log(` => ${new TextDecoder().decode(msg)}`)
+  if (debug) {
+    console.log(`[RTC] ${msg}`)
+    if (msg instanceof ArrayBuffer) {
+      console.log(` => ${new TextDecoder().decode(msg)}`)
+    }
   }
 }
 

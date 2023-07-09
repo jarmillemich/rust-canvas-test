@@ -15,7 +15,7 @@
 
 <script lang="ts" setup>
 import { useRtcHelper } from '@/usables/useRtcHelper';
-import { ConnectionToHost, Engine, init } from '@engine/canvas_test';
+import { Engine, init } from '@engine/canvas_test';
 import { nextTick, onUnmounted, ref } from 'vue';
 
 let connected = ref(false)
@@ -33,7 +33,6 @@ async function start_game() {
 
   // Establish a connection
   let { connection, channel } = await joinSession(sessionName.value, clientName.value)
-  let hostConnection = new ConnectionToHost(channel)
 
   connected.value = true
   await nextTick()
@@ -43,7 +42,7 @@ async function start_game() {
   canvas.value.height = canvas.value.clientHeight
    
   engine = init(canvas.value)
-  engine.connect_as_client(hostConnection)
+  engine.connect_as_client(channel)
   console.log(engine)
   // Engine will start itself once it is ready in this mode
   // engine.start();

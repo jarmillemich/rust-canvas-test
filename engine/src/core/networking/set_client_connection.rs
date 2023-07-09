@@ -43,7 +43,7 @@ pub fn sys_client_scheduler(
         ClientJoinState::NonClient => {
             panic!("Non client but running client scheduler")
         }
-        ClientJoinState::WaitingForWorld => {
+        ClientJoinState::WaitingForWorld | ClientJoinState::NeedsSendInitialPing => {
             // Buffer
             connection_to_host.buffered_messages.extend(finalized_ticks);
         }
@@ -82,12 +82,50 @@ pub enum ClientJoinState {
     /// Game is not currently a client of another game
     #[default]
     NonClient,
+    /// We need to send a ping to the host to let them know we are ready to receive
+    NeedsSendInitialPing,
     /// Waiting for the host to send us the world
     WaitingForWorld,
     /// Have the world, replaying ticks rapidly to get in sync
     CatchingUp,
     /// In sync with the host, playing normally
     Connected,
+}
+
+fn sys_initial_connect(
+    mut join_state: ResMut<NextState<ClientJoinState>>,
+    mut network_queue: ResMut<ResNetworkQueue>,
+    connection_to_host: Res<ConnectionToHost>,
+) {
+    // Send our initial ping
+    web_sys::console::log_1(&"[client] Sending initial ping".into());
+    network_queue.send(&connection_to_host.channel_id, NetworkMessage::Ping(0));
+    join_state.set(ClientJoinState::WaitingForWorld);
+}
+
+fn sys_receive_world_load(
+    mut join_state: ResMut<NextState<ClientJoinState>>,
+    mut network_queue: ResMut<ResNetworkQueue>,
+    client_connection: Res<ConnectionToHost>,
+    mut commands: Commands,
+) {
+    // Receive the world load
+    let mut world_load = network_queue.take_inbound(&client_connection.channel_id, |msg| {
+        matches!(msg, NetworkMessage::World { .. })
+    });
+
+    if let Some(NetworkMessage::World(world_load)) = world_load.pop() {
+        web_sys::console::log_1(
+            &format!(
+                "[client] Received world load at tick {}",
+                world_load.last_finalized_tick
+            )
+            .into(),
+        );
+
+        // Store the world load
+        commands.insert_resource(world_load);
+    }
 }
 
 fn sys_try_load_world(world: &mut World) {
@@ -132,8 +170,10 @@ fn sys_try_load_world(world: &mut World) {
     });
 
     // Align tick coordination
-    let mut tc = world.get_non_send_resource_mut::<ResTickQueue>().unwrap();
-    tc.set_last_finalized_tick(world_load.last_finalized_tick);
+    let mut tc = world
+        .get_resource_mut::<ResTickQueue>()
+        .expect("Tick queue missing");
+    tc.set_last_finalized_tick(world_load.last_finalized_tick - 1);
 
     // Remove this once we are done
     world.remove_resource::<WorldLoad>();
@@ -166,13 +206,30 @@ fn sys_try_load_world(world: &mut World) {
 }
 
 pub fn attach_to_app(app: &mut App) {
+    use crate::engine::SimulationSet;
+
     app.add_state::<ClientJoinState>()
         .add_system(
-            sys_try_load_world.run_if(
-                state_exists::<ClientJoinState>()
-                    .and_then(in_state(ClientJoinState::WaitingForWorld))
-                    .and_then(resource_exists::<WorldLoad>()),
-            ),
+            sys_receive_world_load
+                .run_if(
+                    state_exists::<ClientJoinState>()
+                        .and_then(in_state(ClientJoinState::WaitingForWorld)),
+                )
+                .in_set(SimulationSet::NetworkPre),
         )
-        .add_system(sys_client_scheduler.run_if(in_state(CoordinationState::ConnectedToHost)));
+        .add_system(
+            sys_try_load_world
+                .run_if(
+                    state_exists::<ClientJoinState>()
+                        .and_then(in_state(ClientJoinState::WaitingForWorld))
+                        .and_then(resource_exists::<WorldLoad>()),
+                )
+                .in_set(SimulationSet::NetworkPre),
+        )
+        .add_system(sys_client_scheduler.run_if(
+            in_state(CoordinationState::ConnectedToHost).and_then(
+                in_state(ClientJoinState::CatchingUp).or_else(in_state(ClientJoinState::Connected)),
+            ),
+        ))
+        .add_system(sys_initial_connect.run_if(in_state(ClientJoinState::NeedsSendInitialPing)));
 }

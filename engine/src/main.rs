@@ -4,6 +4,7 @@ fn main() {}
 fn test_serialization() {
     use bevy::prelude::AppTypeRegistry;
     use bevy::scene::serde::SceneDeserializer;
+    use canvas_test::core::networking::serialize_world;
     use canvas_test::engine::Engine;
     use serde::de::DeserializeSeed;
 
@@ -11,15 +12,13 @@ fn test_serialization() {
     engine.connect_local();
     engine.test_tick();
 
-    let stuffing = engine.serialize_world();
+    let stuffing = serialize_world(&engine.get_app().lock().unwrap().world);
 
     println!("{}", String::from_utf8(stuffing.clone()).unwrap());
 
     println!("{:?}", stuffing.len());
 
     let _scene = {
-        // let srlz = String::from_utf8(scene).unwrap();
-        // web_sys::console::log_1(&srlz.clone().into());
         let mut deserializer = ron::de::Deserializer::from_bytes(&stuffing).unwrap();
         let app = engine.get_app();
         let app = app.lock().unwrap();

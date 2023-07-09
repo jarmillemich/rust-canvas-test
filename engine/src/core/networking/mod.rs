@@ -1,17 +1,24 @@
-use bevy::prelude::{Component, NonSendMut, ResMut, Resource, App};
+use bevy::prelude::{
+    in_state, App, IntoSystemConfig, IntoSystemConfigs, NonSendMut, Query, Res, ResMut, Resource,
+};
 use std::collections::HashMap;
 
 pub mod types;
 pub use types::*;
 
-use self::channels::ResChannelManager;
-use crate::core::scheduling::{ResActionQueue, ResTickQueue};
+use crate::engine::SimulationSet;
+
+use self::{channels::ResChannelManager, set_host_connection::sys_host_scheduler};
 
 pub mod channels;
 pub use channels::*;
 
 mod set_client_connection;
 pub use set_client_connection::*;
+mod set_host_connection;
+pub use set_host_connection::*;
+
+use super::scheduling::CoordinationState;
 
 #[derive(Resource, Default)]
 pub struct ResNetworkQueue {
@@ -26,6 +33,13 @@ impl ResNetworkQueue {
             .entry(*channel_id)
             .or_default()
             .push(message);
+    }
+
+    pub fn send_many(&mut self, channel_id: &ChannelId, messages: Vec<NetworkMessage>) {
+        self.outbound_queue
+            .entry(*channel_id)
+            .or_default()
+            .extend(messages);
     }
 
     /// Returns the outbound queue and clears it.
@@ -62,6 +76,7 @@ impl ResNetworkQueue {
     }
 }
 
+/// Multiplexes NetworkMessages between the channel manager and network manager
 pub fn sys_network_sync(
     mut network_queue: ResMut<ResNetworkQueue>,
     mut channel_manager: NonSendMut<ResChannelManager>,
@@ -81,33 +96,50 @@ pub fn sys_network_sync(
     // Receive messages from all channels
     for (channel_id, channel) in channel_manager.iter_channels_mut() {
         let messages = channel.drain();
+
+        if messages.is_empty() {
+            continue;
+        }
+
         network_queue.on_messages(*channel_id, messages);
     }
 }
 
-pub fn sys_host_scheduler(
-    mut action_queue: ResMut<ResActionQueue>,
+fn sys_ping_responder(
     mut network_queue: ResMut<ResNetworkQueue>,
-    mut tick_queue: ResMut<ResTickQueue>,
+    mut clients: Query<&mut ClientConnection>,
+    connection_to_host: Option<Res<ConnectionToHost>>,
 ) {
-    // TODO
-    // 1. Immediately schedule all actions from the action queue to the tick queue
-    // 2. Create a NetworkMessage::FinalizedTick of the last finalized tick
-    // 3. For each client,
-    // 3a. Send them the NetworkMessage::FinalizedTick
-    // 3c. receive a NetworkMessage::ScheduleAction from the client if available
-    // 3d. Immediately schedule those actions
-}
+    // Host side
+    for mut client in &mut clients {
+        let channel_id = client.channel_id;
+        for message in network_queue.take_inbound(&client.channel_id, |message| {
+            matches!(message, NetworkMessage::Ping(_))
+        }) {
+            web_sys::console::log_1(&"Received ping".into());
+            match message {
+                NetworkMessage::Ping(id) => {
+                    network_queue.send(&channel_id, NetworkMessage::Pong(id));
 
-/// Keeps track of the channel to a particular client
-#[derive(Component)]
-pub struct ClientConnection {
-    pub channel_id: ChannelId,
-}
+                    client.on_ping(id);
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
 
-impl ClientConnection {
-    pub fn new(channel_id: ChannelId) -> Self {
-        Self { channel_id }
+    // Client side
+    if let Some(connection_to_host) = connection_to_host {
+        for message in network_queue.take_inbound(&connection_to_host.channel_id, |message| {
+            matches!(message, NetworkMessage::Ping(_))
+        }) {
+            match message {
+                NetworkMessage::Ping(id) => {
+                    network_queue.send(&connection_to_host.channel_id, NetworkMessage::Pong(id));
+                }
+                _ => unreachable!(),
+            }
+        }
     }
 }
 
@@ -116,5 +148,19 @@ pub fn attach_to_app(app: &mut App) {
 
     app.insert_resource(ResNetworkQueue::default())
         .insert_non_send_resource(ResChannelManager::default())
-        .add_system(sys_network_comms);
+        .add_systems(
+            (sys_network_sync, sys_ping_responder, sys_send_world)
+                .before(SimulationSet::BeforeTick),
+        );
+
+    app.add_system(
+        sys_host_scheduler
+            .before(SimulationSet::BeforeTick)
+            .run_if(in_state(CoordinationState::Hosting)),
+    );
+    app.add_system(
+        sys_client_scheduler
+            .before(SimulationSet::BeforeTick)
+            .run_if(in_state(CoordinationState::ConnectedToHost)),
+    );
 }

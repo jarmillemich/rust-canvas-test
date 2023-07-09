@@ -16,7 +16,7 @@ use crate::{
     core::{
         networking::{
             channels::ResChannelManager, ChannelId, ClientConnection, ConnectionToHost,
-            NetworkMessage, RtcNetworkChannel, WorldLoad,
+            RtcNetworkChannel,
         },
         scheduling::{CoordinationState, ResEventQueue, ResTickQueue},
     },
@@ -24,7 +24,6 @@ use crate::{
     systems,
 };
 use bevy::{prelude::*, scene::ScenePlugin};
-use futures::channel::oneshot::channel;
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{HtmlCanvasElement, RtcDataChannel};
 
@@ -102,34 +101,24 @@ impl Engine {
         }
 
         self.set_coord_state(CoordinationState::ConnectedLocal);
+        self.start();
     }
 
     /// Starts a hosting session that others can join
     pub fn connect_as_host(&mut self) {
         self.assert_not_connected();
-        let mut app = self.app.lock().unwrap();
-        app.add_startup_system(sys_init_world);
+        {
+            let mut app = self.app.lock().unwrap();
+            app.add_startup_system(sys_init_world);
 
-        app.world
-            .get_resource_mut::<NextState<SimulationState>>()
-            .unwrap()
-            .set(SimulationState::Running);
+            app.world
+                .get_resource_mut::<NextState<SimulationState>>()
+                .unwrap()
+                .set(SimulationState::Running);
+        }
 
         self.set_coord_state(CoordinationState::Hosting);
-    }
-
-    /// Serializes the world, e.g. to send to a newly connected client
-    pub fn serialize_world(&self) -> Vec<u8> {
-        // Pack everything into a scene
-        let world = &self.app.lock().unwrap().world;
-        let type_registry = world.resource::<AppTypeRegistry>();
-        let scene = DynamicScene::from_world(world, type_registry);
-
-        // Serialize into a RON string
-        // TODO we should perhaps just directly serialize into bytes, this method produces a prettified version
-        let serialized = scene.serialize_ron(type_registry).unwrap();
-
-        serialized.into_bytes()
+        self.start();
     }
 
     fn register_channel(&self, connection: RtcDataChannel) -> ChannelId {
@@ -143,7 +132,7 @@ impl Engine {
     }
 
     /// Adds a new client to a hosting session
-    pub fn add_client_as_host(&self, mut connection: RtcDataChannel) {
+    pub fn add_client_as_host(&self, connection: RtcDataChannel) {
         assert!(
             matches!(self.get_coord_state(), CoordinationState::Hosting),
             "Must be hosting to accept clients"
@@ -170,7 +159,7 @@ impl Engine {
             app.world
                 .get_resource_mut::<NextState<ClientJoinState>>()
                 .unwrap()
-                .set(ClientJoinState::WaitingForWorld);
+                .set(ClientJoinState::NeedsSendInitialPing);
         }
         self.start();
     }
@@ -271,10 +260,36 @@ pub enum SimulationState {
 }
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
-enum SimulationSet {
+pub enum SimulationSet {
+    /// "Before simulation" network systems. Always runs. Use this to e.g. receive messages and queue anything up for the simulation
+    NetworkPre,
+    /// "Regular" network systems. Always runs
+    NetworkPost,
+
+    /// Systems to run before the main simulation set
     BeforeTick,
+    /// Primary simulation systems
     Tick,
+    /// Systems to run after the main simulation set
     AfterTick,
+}
+
+fn sys_tick_logger(tc: Res<ResTickQueue>) {
+    let current = tc.current_tick;
+    let finalized = tc.get_last_finalized_tick();
+    let num_actions = tc.current_tick_actions().len();
+    let can_proceed = tc.is_next_tick_finalized();
+
+    js_sys::Reflect::set(
+        &web_sys::window().unwrap(),
+        &JsValue::from("__debug_current_tick"),
+        &format!(
+            "Tick {}/{} with {} actions, can proceed: {}",
+            current, finalized, num_actions, can_proceed
+        )
+        .into(),
+    )
+    .unwrap();
 }
 
 fn init_app() -> App {
@@ -292,18 +307,28 @@ fn init_app() -> App {
     // Register systems
     app.add_systems(sim_systems.in_set(SimulationSet::Tick));
     app.add_system(sys_consume_tick.in_set(SimulationSet::AfterTick));
+    app.add_system(
+        sys_tick_logger
+            .before(SimulationSet::Tick)
+            .after(SimulationSet::BeforeTick),
+    );
 
+    // TODO no distributive_run_if here?
     app.configure_set(SimulationSet::BeforeTick.run_if(can_simulation_proceed));
     app.configure_set(SimulationSet::Tick.run_if(can_simulation_proceed));
     app.configure_set(SimulationSet::AfterTick.run_if(can_simulation_proceed));
     app.configure_sets(
         (
+            SimulationSet::NetworkPre,
             SimulationSet::BeforeTick,
             SimulationSet::Tick,
             SimulationSet::AfterTick,
         )
             .chain(),
     );
+
+    // NetworkPost is after NetworkPre but may run in parallel with the simulation
+    app.configure_set(SimulationSet::NetworkPost.after(SimulationSet::NetworkPre));
 
     // Attach our modules
     crate::core::networking::attach_to_app(&mut app);

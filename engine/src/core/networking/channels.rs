@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bevy::prelude::{ResMut, NonSendMut};
+use bevy::prelude::{NonSendMut, ResMut};
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::{prelude::Closure, JsCast};
@@ -81,7 +81,7 @@ pub struct ResChannelManager {
     last_id: usize,
 }
 
-#[derive(Eq, PartialEq, Hash, Serialize, Deserialize, Copy, Clone)]
+#[derive(Eq, PartialEq, Hash, Serialize, Deserialize, Copy, Clone, Debug)]
 pub struct ChannelId(usize);
 
 impl ResChannelManager {

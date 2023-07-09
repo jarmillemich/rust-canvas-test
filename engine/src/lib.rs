@@ -13,7 +13,7 @@ mod systems;
 mod utils;
 
 // Modules
-mod core;
+pub mod core;
 
 // Web
 use wasm_bindgen::prelude::*;
