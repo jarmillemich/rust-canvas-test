@@ -1,4 +1,8 @@
-use crate::core::scheduling::{ResActionQueue, ResTickQueue};
+use crate::{
+    core::scheduling::{ResActionQueue, ResTickQueue},
+    engine::ResLogger,
+    utils::log,
+};
 use bevy::prelude::*;
 
 use super::{ChannelId, NetworkMessage, ResNetworkQueue, WorldLoad};
@@ -8,6 +12,7 @@ pub fn sys_host_scheduler(
     mut network_queue: ResMut<ResNetworkQueue>,
     mut tick_queue: ResMut<ResTickQueue>,
     mut clients: Query<&mut ClientConnection>,
+    logger: Res<ResLogger>,
 ) {
     // 1. Immediately schedule all actions from the action queue to the tick queue
     // 2. Create a NetworkMessage::FinalizedTick of the last finalized tick
@@ -19,6 +24,8 @@ pub fn sys_host_scheduler(
     let next_tick = tick_queue.next_unfinalized_tick();
     tick_queue.finalize_tick_with_actions(next_tick, action_queue.take_queue());
 
+    let mut min_sent = tick_queue.get_last_simulated_tick();
+
     for mut client in &mut clients.iter_mut().filter(|c| c.is_connected()) {
         // Send ours
         let channel_id = client.channel_id;
@@ -27,6 +34,8 @@ pub fn sys_host_scheduler(
 
         network_queue.send_many(&channel_id, messages);
         client.last_finalized_tick = last_finalized_tick;
+
+        min_sent = min_sent.min(last_finalized_tick);
 
         // Schedule theirs
         let messages = network_queue.take_inbound(&channel_id, |message| {
@@ -39,6 +48,8 @@ pub fn sys_host_scheduler(
             }
         }
     }
+
+    tick_queue.reset_through(min_sent);
 }
 
 /// Keeps track of the channel to a particular client
@@ -77,7 +88,7 @@ impl ClientConnection {
             self.connection_state,
             ClientConnectionState::WaitingForHello
         ) {
-            web_sys::console::log_1(&"[conn] Client sent initial ping".into());
+            log("[conn] Client sent initial ping".into());
             self.connection_state = ClientConnectionState::NeedsWorldSend;
         }
     }
@@ -88,7 +99,7 @@ impl ClientConnection {
 
     pub fn on_world_send(&mut self, tick: usize) {
         self.connection_state = ClientConnectionState::Connected;
-        self.last_finalized_tick = tick - 1;
+        self.last_finalized_tick = tick;
     }
 }
 
@@ -96,15 +107,15 @@ pub fn sys_send_world(world: &mut World) {
     let mut query = world.query::<&mut ClientConnection>();
 
     if query.iter(world).any(|client| client.needs_world_send()) {
-        web_sys::console::log_1(&"[conn] Sending world to one or more clients".into());
+        log("[conn] Sending world to one or more clients".into());
 
         let tick_queue = world.get_resource::<ResTickQueue>().unwrap();
 
-        let last_finalized_tick = tick_queue.current_tick;
+        let last_simulated_tick = tick_queue.get_last_simulated_tick();
 
         let world_load: WorldLoad = WorldLoad {
             scene: serialize_world(world),
-            last_finalized_tick,
+            last_simulated_tick,
         };
         let message = NetworkMessage::World(world_load);
 
@@ -113,7 +124,7 @@ pub fn sys_send_world(world: &mut World) {
         query.for_each_mut(world, |mut client_connection| {
             if client_connection.needs_world_send() {
                 to_send.push((client_connection.channel_id, message.clone()));
-                client_connection.on_world_send(last_finalized_tick);
+                client_connection.on_world_send(last_simulated_tick);
             }
         });
 

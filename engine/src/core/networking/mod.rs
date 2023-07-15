@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub mod types;
 pub use types::*;
 
-use crate::engine::SimulationSet;
+use crate::{engine::SimulationSet, utils::log};
 
 use self::{channels::ResChannelManager, set_host_connection::sys_host_scheduler};
 
@@ -116,7 +116,7 @@ fn sys_ping_responder(
         for message in network_queue.take_inbound(&client.channel_id, |message| {
             matches!(message, NetworkMessage::Ping(_))
         }) {
-            web_sys::console::log_1(&"Received ping".into());
+            log("Received ping".into());
             match message {
                 NetworkMessage::Ping(id) => {
                     network_queue.send(&channel_id, NetworkMessage::Pong(id));
@@ -151,6 +151,12 @@ pub fn attach_to_app(app: &mut App) {
         .add_systems(
             (sys_network_sync, sys_ping_responder, sys_send_world)
                 .before(SimulationSet::BeforeTick),
+        )
+        // XXX Adding another sync after the scheduler so we can send out stuff before starting a new tick and making everything out of date again
+        .add_system(
+            sys_network_sync
+                .in_set(SimulationSet::NetworkPost)
+                .after(sys_host_scheduler),
         );
 
     app.add_system(

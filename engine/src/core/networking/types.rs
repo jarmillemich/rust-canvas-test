@@ -32,6 +32,6 @@ pub enum NetworkMessage {
 pub struct WorldLoad {
     /// Serialized DynamicScene
     pub scene: Vec<u8>,
-    /// Last tick that has processed as of scene being serialized
-    pub last_finalized_tick: usize,
+    /// Last tick that has simulated as of scene being serialized
+    pub last_simulated_tick: usize,
 }

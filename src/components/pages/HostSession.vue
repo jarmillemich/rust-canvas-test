@@ -18,8 +18,8 @@ let engine: Engine
 startHostingSession(async ({ connection, channel }) => {
   if (!engine) throw new Error('No engine yet?')
 
-  engine.add_client_as_host(channel)
-
+  engine.add_client_as_host_rtc(channel)
+  
   console.log('Client connected')
 })
 
@@ -33,7 +33,7 @@ onMounted(() => {
   engine = init(canvas.value)
   engine.connect_as_host();
   console.log(engine)
-  engine.start();
+  engine.start_web();
 })
 
 onUnmounted(() => {

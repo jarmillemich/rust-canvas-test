@@ -1,5 +1,7 @@
 use std::{
     cell::RefCell,
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
     rc::Rc,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -15,15 +17,20 @@ use crate::{
     },
     core::{
         networking::{
-            channels::ResChannelManager, ChannelId, ClientConnection, ConnectionToHost,
-            RtcNetworkChannel,
+            channels::ResChannelManager, serialize_world, ChannelId, ClientConnection,
+            ConnectionToHost, NetworkChannel, RtcNetworkChannel,
         },
         scheduling::{CoordinationState, ResEventQueue, ResTickQueue},
     },
     renderer::init_renderer,
     systems,
+    utils::{debug_variable, log},
 };
-use bevy::{prelude::*, scene::ScenePlugin};
+use bevy::{
+    ecs::{entity::Entities, schedule::ScheduleLabel},
+    prelude::*,
+    scene::ScenePlugin,
+};
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{HtmlCanvasElement, RtcDataChannel};
 
@@ -98,10 +105,11 @@ impl Engine {
                 .get_resource_mut::<NextState<SimulationState>>()
                 .unwrap()
                 .set(SimulationState::Running);
+
+            app.insert_resource(ResLogger::new("LOCAL"));
         }
 
         self.set_coord_state(CoordinationState::ConnectedLocal);
-        self.start();
     }
 
     /// Starts a hosting session that others can join
@@ -115,53 +123,21 @@ impl Engine {
                 .get_resource_mut::<NextState<SimulationState>>()
                 .unwrap()
                 .set(SimulationState::Running);
+
+            app.insert_resource(ResLogger::new("HOST"));
         }
 
         self.set_coord_state(CoordinationState::Hosting);
-        self.start();
     }
 
-    fn register_channel(&self, connection: RtcDataChannel) -> ChannelId {
-        let mut app = self.app.lock().unwrap();
-        let mut channel_manager = app
-            .world
-            .get_non_send_resource_mut::<ResChannelManager>()
-            .unwrap();
-        let channel = RtcNetworkChannel::new(connection);
-        channel_manager.register_channel(Box::new(channel))
+    pub fn add_client_as_host_rtc(&self, connection: RtcDataChannel) {
+        let channel = Box::new(RtcNetworkChannel::new(connection));
+        self.add_client_as_host(channel)
     }
 
-    /// Adds a new client to a hosting session
-    pub fn add_client_as_host(&self, connection: RtcDataChannel) {
-        assert!(
-            matches!(self.get_coord_state(), CoordinationState::Hosting),
-            "Must be hosting to accept clients"
-        );
-
-        // Add to the session
-        let channel_id = self.register_channel(connection);
-        let client_connection = ClientConnection::new(channel_id);
-        self.app.lock().unwrap().world.spawn((client_connection,));
-    }
-
-    /// Connects to a remote session as a client
-    pub fn connect_as_client(&mut self, connection: RtcDataChannel) {
-        self.assert_not_connected();
-        self.set_coord_state(CoordinationState::ConnectedToHost);
-
-        {
-            let channel_id = self.register_channel(connection);
-            let client = ConnectionToHost::new(channel_id);
-            let mut app = self.app.lock().unwrap();
-            app.insert_resource(client);
-
-            use crate::core::networking::ClientJoinState;
-            app.world
-                .get_resource_mut::<NextState<ClientJoinState>>()
-                .unwrap()
-                .set(ClientJoinState::NeedsSendInitialPing);
-        }
-        self.start();
+    pub fn connect_as_client_rtc(&mut self, connection: RtcDataChannel) {
+        let channel = Box::new(RtcNetworkChannel::new(connection));
+        self.connect_as_client(channel)
     }
 }
 
@@ -201,7 +177,20 @@ impl Engine {
                 return;
             }
 
-            app.lock().unwrap().update();
+            let mut app = app.lock().unwrap();
+
+            // Catch up ticks, if needed
+            let tc = app.world.get_resource::<ResTickQueue>().unwrap();
+            let current = tc.get_last_simulated_tick();
+            let max = tc.get_last_finalized_tick();
+            if max - current > 1 {
+                // We are behind, catch up
+                for _ in current..max {
+                    app.update();
+                }
+            }
+
+            app.update();
 
             request_animation_frame(f.borrow().as_ref().unwrap());
         }));
@@ -212,12 +201,56 @@ impl Engine {
     pub fn test_tick(&self) {
         self.app.lock().unwrap().update();
     }
+
+    fn register_channel(&self, channel: Box<dyn NetworkChannel>) -> ChannelId {
+        let mut app = self.app.lock().unwrap();
+        let mut channel_manager = app
+            .world
+            .get_non_send_resource_mut::<ResChannelManager>()
+            .unwrap();
+
+        channel_manager.register_channel(channel)
+    }
+
+    /// Adds a new client to a hosting session
+    pub fn add_client_as_host(&self, channel: Box<dyn NetworkChannel>) {
+        assert!(
+            matches!(self.get_coord_state(), CoordinationState::Hosting),
+            "Must be hosting to accept clients"
+        );
+
+        // Add to the session
+        let channel_id = self.register_channel(channel);
+        let client_connection = ClientConnection::new(channel_id);
+        self.app.lock().unwrap().world.spawn((client_connection,));
+    }
+
+    /// Connects to a remote session as a client
+    pub fn connect_as_client(&mut self, channel: Box<dyn NetworkChannel>) {
+        self.assert_not_connected();
+        self.set_coord_state(CoordinationState::ConnectedToHost);
+
+        {
+            let channel_id = self.register_channel(channel);
+            let client = ConnectionToHost::new(channel_id);
+            let mut app = self.app.lock().unwrap();
+            app.insert_resource(client);
+
+            use crate::core::networking::ClientJoinState;
+            app.world
+                .get_resource_mut::<NextState<ClientJoinState>>()
+                .unwrap()
+                .set(ClientJoinState::NeedsSendInitialPing);
+
+            app.insert_resource(ResLogger::new("CLIENT"));
+        }
+    }
 }
 
 // The JavaScript interface
 #[wasm_bindgen]
 impl Engine {
-    pub fn start(&mut self) {
+    pub fn start_web(&mut self) {
         let was_running = self.is_running.fetch_or(true, Ordering::Relaxed);
         if !was_running {
             self.tick();
@@ -274,28 +307,71 @@ pub enum SimulationSet {
     AfterTick,
 }
 
+#[derive(ScheduleLabel, Hash, Debug, Eq, PartialEq, Clone)]
+pub enum SomeLabelsMaybe {
+    Simulation,
+}
+
 fn sys_tick_logger(tc: Res<ResTickQueue>) {
-    let current = tc.current_tick;
+    let to_simulate = tc.get_next_tick_to_simulate();
     let finalized = tc.get_last_finalized_tick();
     let num_actions = tc.current_tick_actions().len();
     let can_proceed = tc.is_next_tick_finalized();
 
-    js_sys::Reflect::set(
-        &web_sys::window().unwrap(),
-        &JsValue::from("__debug_current_tick"),
-        &format!(
+    debug_variable(
+        "__debug_current_tick",
+        format!(
             "Tick {}/{} with {} actions, can proceed: {}",
-            current, finalized, num_actions, can_proceed
-        )
-        .into(),
-    )
-    .unwrap();
+            to_simulate, finalized, num_actions, can_proceed
+        ),
+    );
+}
+
+fn sys_sim_runner(world: &mut World) {
+    let sim_state = world.get_resource_mut::<State<SimulationState>>().unwrap();
+    if sim_state.0 == SimulationState::Running {
+        world.run_schedule(SomeLabelsMaybe::Simulation);
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct ResLastTickHash(pub u64);
+
+#[derive(Resource, Default)]
+pub struct ResLogger {
+    tag: String,
+}
+
+impl ResLogger {
+    pub fn new(tag: &str) -> Self {
+        Self {
+            tag: tag.to_string(),
+        }
+    }
+
+    pub fn log(&self, msg: &str) {
+        self.log_inner(format!("[{}] LOG: {}", self.tag, msg).as_str());
+    }
+
+    pub fn debug(&self, msg: &str) {
+        self.log_inner(format!("[{}] DBG: {}", self.tag, msg).as_str());
+    }
+
+    fn log_inner(&self, msg: &str) {
+        // #[cfg(target_arch = "wasm32")]
+        web_sys::console::log_1(&msg.into());
+        #[cfg(not(target_arch = "wasm32"))]
+        println!("{msg}");
+    }
 }
 
 fn init_app() -> App {
     let mut app = App::new();
 
     app.add_state::<SimulationState>();
+
+    let sim_schedule = Schedule::default();
+    app.add_schedule(SomeLabelsMaybe::Simulation, sim_schedule);
 
     let sim_systems = (
         systems::sys_movement_receive,
@@ -305,8 +381,13 @@ fn init_app() -> App {
     );
 
     // Register systems
-    app.add_systems(sim_systems.in_set(SimulationSet::Tick));
-    app.add_system(sys_consume_tick.in_set(SimulationSet::AfterTick));
+    app.add_systems(
+        sim_systems
+            .in_set(SimulationSet::Tick)
+            .in_schedule(SomeLabelsMaybe::Simulation),
+    );
+    app.add_system(sys_sim_runner.in_set(SimulationSet::Tick));
+
     app.add_system(
         sys_tick_logger
             .before(SimulationSet::Tick)
@@ -327,6 +408,14 @@ fn init_app() -> App {
             .chain(),
     );
 
+    // app.add_system(sys_pretick_log.in_set(SimulationSet::BeforeTick));
+    app.insert_resource(ResLastTickHash::default());
+    app.add_systems(
+        (sys_world_checksum, sys_consume_tick)
+            .chain()
+            .in_set(SimulationSet::AfterTick),
+    );
+
     // NetworkPost is after NetworkPre but may run in parallel with the simulation
     app.configure_set(SimulationSet::NetworkPost.after(SimulationSet::NetworkPre));
 
@@ -344,8 +433,53 @@ fn init_app() -> App {
     app
 }
 
-fn sys_consume_tick(mut tc: ResMut<ResTickQueue>) {
-    tc.advance();
+// fn sys_pretick_log(logger: Res<ResLogger>, tc: Res<ResTickQueue>, entities: &Entities) {
+//     logger.log(
+//         format!(
+//             "About to simulate tick {} with {}",
+//             tc.get_next_tick_to_simulate(),
+//             entities.len(),
+//         )
+//         .as_str(),
+//     );
+// }
+
+fn sys_world_checksum(world: &mut World) {
+    let tick = world
+        .get_resource::<ResTickQueue>()
+        .unwrap()
+        .get_last_simulated_tick();
+    // let logger = world.get_resource::<ResLogger>().unwrap();
+
+    let mut query = world.query::<&Position>();
+    let hash = query.iter(world).fold(0, |acc, at| {
+        //(|at| at.hash(&mut hasher));
+        let mut hasher = DefaultHasher::new();
+        at.hash(&mut hasher);
+        let hash = hasher.finish();
+        // log(format!("  Hash: {:?} {:x}", at, hash));
+        acc ^ hash
+    });
+
+    //debug_variable("__debug_world_hash", format!("{} 0x{:x}", tick, hash));
+    // let logger = world.get_resource::<ResLogger>().unwrap();
+    // logger.debug(format!("Checksum at {} 0x{:x}", tick, hash).as_str());
+
+    if tick % 100 == 0 {
+        log(format!("World hash @ {}: 0x{:x}", tick, hash));
+    }
+
+    world.get_resource_mut::<ResLastTickHash>().unwrap().0 = hash;
+}
+
+/// Schedule after we have finished simulating a tick
+fn sys_consume_tick(
+    mut tc: ResMut<ResTickQueue>,
+    lth: Res<ResLastTickHash>,
+    // logger: Res<ResLogger>,
+) {
+    // logger.log(format!("Done with tick {}", tc.get_next_tick_to_simulate()).as_str());
+    tc.advance(lth.0);
 }
 
 /// Determines if we are currently able to advance a tick, as opposed to waiting

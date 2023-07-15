@@ -18,6 +18,8 @@ pub fn sys_local_scheduler(
 
     let next_tick = tick_queue.next_unfinalized_tick();
     tick_queue.finalize_tick_with_actions(next_tick, action_queue.take_queue());
+
+    tick_queue.reset_simulated();
 }
 
 #[derive(States, Debug, Default, Hash, PartialEq, Eq, Clone)]

@@ -42,10 +42,9 @@ async function start_game() {
   canvas.value.height = canvas.value.clientHeight
    
   engine = init(canvas.value)
-  engine.connect_as_client(channel)
+  engine.connect_as_client_rtc(channel)
   console.log(engine)
-  // Engine will start itself once it is ready in this mode
-  // engine.start();
+  engine.start_web();
 }
 
 onUnmounted(() => {

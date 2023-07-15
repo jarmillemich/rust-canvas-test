@@ -143,10 +143,16 @@ pub fn make_fake_network_channel_pair() -> (Box<dyn NetworkChannel>, Box<dyn Net
 
 impl NetworkChannel for FakeNetworkChannel {
     fn send(&mut self, mut messages: Vec<NetworkMessage>) {
+        // for msg in &messages {
+        //     println!("Sending message: {:?}", msg);
+        // }
         self.outbound.lock().unwrap().append(&mut messages);
     }
 
     fn drain(&mut self) -> Vec<NetworkMessage> {
+        // for msg in self.inbound.lock().unwrap().iter() {
+        //     println!("Draining message: {:?}", msg);
+        // }
         self.inbound.lock().unwrap().drain(..).collect()
     }
 }

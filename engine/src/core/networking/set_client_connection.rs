@@ -1,4 +1,5 @@
 use bevy::{
+    ecs::entity::EntityMap,
     prelude::{AppTypeRegistry, Assets, World, *},
     scene::{serde::SceneDeserializer, DynamicScene, DynamicSceneBundle},
 };
@@ -9,7 +10,8 @@ use crate::{
         networking::WorldLoad,
         scheduling::{CoordinationState, ResActionQueue, ResTickQueue},
     },
-    engine::SimulationState,
+    engine::{ResLogger, SimulationState},
+    utils::log,
 };
 
 use super::{ChannelId, NetworkMessage, ResNetworkQueue};
@@ -20,6 +22,7 @@ pub fn sys_client_scheduler(
     mut tick_queue: ResMut<ResTickQueue>,
     mut connection_to_host: ResMut<ConnectionToHost>,
     join_state: Res<State<ClientJoinState>>,
+    logger: Res<ResLogger>,
 ) {
     // 1. Drain all actions from the action queue
     // 2. Wrap in a NetworkMessage::ScheduleActions
@@ -47,17 +50,23 @@ pub fn sys_client_scheduler(
             // Buffer
             connection_to_host.buffered_messages.extend(finalized_ticks);
         }
-        ClientJoinState::CatchingUp | ClientJoinState::Connected => {
+        ClientJoinState::Connected => {
             // Play received messages and any buffered messages
             for msg in finalized_ticks
                 .into_iter()
                 .chain(connection_to_host.buffered_messages.drain(..))
             {
                 if let NetworkMessage::FinalizedTick { tick, actions } = msg {
+                    // logger.debug(format!("Received finalized tick {}", tick).as_str());
                     tick_queue.finalize_tick_with_actions(tick, actions);
                 }
             }
         }
+    }
+
+    // Reset up to where we have simulated
+    if matches!(join_state.0, ClientJoinState::Connected) {
+        tick_queue.reset_simulated();
     }
 }
 
@@ -86,8 +95,6 @@ pub enum ClientJoinState {
     NeedsSendInitialPing,
     /// Waiting for the host to send us the world
     WaitingForWorld,
-    /// Have the world, replaying ticks rapidly to get in sync
-    CatchingUp,
     /// In sync with the host, playing normally
     Connected,
 }
@@ -98,13 +105,12 @@ fn sys_initial_connect(
     connection_to_host: Res<ConnectionToHost>,
 ) {
     // Send our initial ping
-    web_sys::console::log_1(&"[client] Sending initial ping".into());
+    log("[client] Sending initial ping".into());
     network_queue.send(&connection_to_host.channel_id, NetworkMessage::Ping(0));
     join_state.set(ClientJoinState::WaitingForWorld);
 }
 
 fn sys_receive_world_load(
-    mut join_state: ResMut<NextState<ClientJoinState>>,
     mut network_queue: ResMut<ResNetworkQueue>,
     client_connection: Res<ConnectionToHost>,
     mut commands: Commands,
@@ -115,13 +121,10 @@ fn sys_receive_world_load(
     });
 
     if let Some(NetworkMessage::World(world_load)) = world_load.pop() {
-        web_sys::console::log_1(
-            &format!(
-                "[client] Received world load at tick {}",
-                world_load.last_finalized_tick
-            )
-            .into(),
-        );
+        log(format!(
+            "[client] Received world load at tick {}",
+            world_load.last_simulated_tick
+        ));
 
         // Store the world load
         commands.insert_resource(world_load);
@@ -129,7 +132,7 @@ fn sys_receive_world_load(
 }
 
 fn sys_try_load_world(world: &mut World) {
-    web_sys::console::log_1(&"[client] Loading world maybe".into());
+    log("[client] Loading world maybe".into());
 
     // Start afresh
     // TODO maybe have a marker component so we don't clear special things?
@@ -141,7 +144,7 @@ fn sys_try_load_world(world: &mut World) {
     // Convert from ron to DynamicScene we can insert
     let scene = {
         // let srlz = String::from_utf8(scene).unwrap();
-        // web_sys::console::log_1(&srlz.clone().into());
+        // log(&srlz.clone().into());
         let mut deserializer = ron::de::Deserializer::from_bytes(&scene).unwrap();
         let scene_deserializer = SceneDeserializer {
             type_registry: &world.resource::<AppTypeRegistry>().read(),
@@ -149,42 +152,30 @@ fn sys_try_load_world(world: &mut World) {
         scene_deserializer.deserialize(&mut deserializer).unwrap()
     };
 
-    web_sys::console::log_1(
-        &format!(
-            "[client] Initial scene from server has {} entities",
-            scene.entities.len()
-        )
-        .into(),
-    );
+    log(format!(
+        "[client] Initial scene from server has {} entities",
+        scene.entities.len()
+    ));
 
-    // Wrap in an asset
-    let scene = world
-        .get_resource_mut::<Assets<DynamicScene>>()
-        .expect("Should be able to get a DynamicScene asset to deserialize into")
-        .add(scene);
+    let mut entity_map = EntityMap::default();
+    scene.write_to_world(world, &mut entity_map).unwrap();
 
-    // Spawn the scene
-    world.spawn(DynamicSceneBundle {
-        scene,
-        ..Default::default()
-    });
+    // Double checking
+    log(format!(
+        "[client] Actually spawned {} entities",
+        world.entities().len()
+    ));
 
     // Align tick coordination
     let mut tc = world
         .get_resource_mut::<ResTickQueue>()
         .expect("Tick queue missing");
-    tc.set_last_finalized_tick(world_load.last_finalized_tick - 1);
+    tc.set_last_simulated_tick(world_load.last_simulated_tick);
 
     // Remove this once we are done
     world.remove_resource::<WorldLoad>();
 
-    // Next is to catch up
-    world
-        .get_resource_mut::<NextState<ClientJoinState>>()
-        .unwrap()
-        .set(ClientJoinState::CatchingUp);
-
-    // TESTING just allow regular running
+    // TESTING just allow regular running last_simulated_tick
     world
         .get_resource_mut::<NextState<SimulationState>>()
         .unwrap()
@@ -196,13 +187,10 @@ fn sys_try_load_world(world: &mut World) {
         .unwrap()
         .set(ClientJoinState::Connected);
 
-    web_sys::console::log_1(
-        &format!(
-            "[client] Loaded world, initial tick was {}",
-            world_load.last_finalized_tick
-        )
-        .into(),
-    );
+    log(format!(
+        "[client] Loaded world, initial tick was {}",
+        world_load.last_simulated_tick
+    ));
 }
 
 pub fn attach_to_app(app: &mut App) {
@@ -224,12 +212,13 @@ pub fn attach_to_app(app: &mut App) {
                         .and_then(in_state(ClientJoinState::WaitingForWorld))
                         .and_then(resource_exists::<WorldLoad>()),
                 )
-                .in_set(SimulationSet::NetworkPre),
+                .after(SimulationSet::AfterTick),
         )
-        .add_system(sys_client_scheduler.run_if(
-            in_state(CoordinationState::ConnectedToHost).and_then(
-                in_state(ClientJoinState::CatchingUp).or_else(in_state(ClientJoinState::Connected)),
+        .add_system(
+            sys_client_scheduler.run_if(
+                in_state(CoordinationState::ConnectedToHost)
+                    .and_then(in_state(ClientJoinState::Connected)),
             ),
-        ))
+        )
         .add_system(sys_initial_connect.run_if(in_state(ClientJoinState::NeedsSendInitialPing)));
 }

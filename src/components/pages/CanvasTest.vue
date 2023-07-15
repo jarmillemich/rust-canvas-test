@@ -22,7 +22,7 @@ onMounted(() => {
   engine = init(canvas.value)
   engine.connect_local();
   console.log(engine)
-  engine.start();
+  engine.start_web();
 })
 
 onUnmounted(() => {

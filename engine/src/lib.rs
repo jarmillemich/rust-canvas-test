@@ -14,6 +14,9 @@ mod utils;
 // Modules
 pub mod core;
 
+// Tests
+mod test;
+
 // Web
 use wasm_bindgen::prelude::*;
 pub mod engine;

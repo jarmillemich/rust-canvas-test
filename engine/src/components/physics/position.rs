@@ -1,7 +1,7 @@
 use crate::fixed_point::FixedPoint;
 use bevy::prelude::*;
 
-#[derive(Component, Default, Reflect)]
+#[derive(Component, Default, Reflect, Hash, Debug)]
 #[reflect(Component)]
 pub struct Position {
     pub x: FixedPoint,

@@ -4,9 +4,9 @@ use crate::{
         physics::{Gravity, MovementReceiver, Position, Velocity},
     },
     core::scheduling::{Action, ResTickQueue},
+    utils::log,
 };
 use bevy::prelude::*;
-use web_sys::console;
 
 pub fn sys_fire_receive(
     world: &World,
@@ -36,7 +36,7 @@ pub fn sys_fire_receive(
                 }
 
                 let ent_count = world.entities().total_count();
-                console::log_1(&format!("Have {ent_count} entities now").into());
+                log(format!("Have {ent_count} entities now"));
             }
             _ => continue,
         }

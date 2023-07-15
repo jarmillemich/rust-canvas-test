@@ -3,7 +3,7 @@ use bevy::prelude::Resource;
 use super::Action;
 use crate::core::networking::NetworkMessage;
 
-const ACTION_QUEUE_SLOTS: usize = 256;
+const ACTION_QUEUE_SLOTS: usize = 128;
 
 enum QueueSlotState {
     /// We should not yet process this slot
@@ -11,11 +11,17 @@ enum QueueSlotState {
 
     /// We can process this slot
     Finalized,
+
+    /// We have simulated the actions in this slot
+    Simulated,
 }
 
 struct QueueSlot {
     state: QueueSlotState,
     actions: Vec<Action>,
+
+    // If this slot is finalized and simulated, the checksum of the state after
+    checksum: u64,
 }
 
 #[allow(unused)]
@@ -28,19 +34,34 @@ impl QueueSlot {
         matches!(self.state, QueueSlotState::Finalized)
     }
 
+    pub fn is_simulated(&self) -> bool {
+        matches!(self.state, QueueSlotState::Simulated)
+    }
+
+    pub fn on_simulated(&mut self, checksum: u64) {
+        assert!(self.is_finalized());
+        self.state = QueueSlotState::Simulated;
+        self.checksum = checksum;
+    }
+
     pub fn reset(&mut self) {
         self.state = QueueSlotState::Pending;
         self.actions.clear();
+        self.checksum = 0;
     }
 }
+
+// Special cases: Tick 0 is always considered simulated
 
 #[derive(Resource)]
 pub struct ResTickQueue {
     /// The current simulation tick
-    pub current_tick: usize,
+    next_tick_to_simulate: usize,
 
     /// The last tick that is finalized (has no non-finalized ticks before it)
     last_finalized_tick: usize,
+
+    first_populated_slot: usize,
 
     /// The queue of upcoming actions
     action_queue: [QueueSlot; ACTION_QUEUE_SLOTS],
@@ -57,62 +78,81 @@ impl ResTickQueue {
         const EMPTY_SLOT: QueueSlot = QueueSlot {
             state: QueueSlotState::Pending,
             actions: Vec::new(),
+            checksum: 0,
         };
 
-        let action_queue = [EMPTY_SLOT; ACTION_QUEUE_SLOTS];
+        let mut action_queue = [EMPTY_SLOT; ACTION_QUEUE_SLOTS];
+
+        // XXX
+        action_queue[0].state = QueueSlotState::Simulated;
 
         Self {
-            current_tick: 0,
+            next_tick_to_simulate: 1,
             last_finalized_tick: 0,
+            first_populated_slot: 0,
             action_queue,
         }
+    }
+
+    pub fn get_last_simulated_tick(&self) -> usize {
+        self.next_tick_to_simulate - 1
+    }
+
+    pub fn get_next_tick_to_simulate(&self) -> usize {
+        self.next_tick_to_simulate
     }
 
     pub fn get_last_finalized_tick(&self) -> usize {
         self.last_finalized_tick
     }
 
-    pub fn set_last_finalized_tick(&mut self, tick: usize) {
+    pub fn set_last_simulated_tick(&mut self, tick: usize) {
         self.last_finalized_tick = tick;
-        self.current_tick = tick;
+        self.next_tick_to_simulate = tick + 1;
+        self.first_populated_slot = tick;
 
         // Reset everything, something else is responsible now
-        // for slot in self.action_queue.iter_mut() {
-        //     slot.reset();
-        // }
+        for slot in self.action_queue.iter_mut() {
+            slot.reset();
+        }
 
-        self.finalize_tick(tick);
+        //self.queue_slot_at(self.get_last_simulated_tick()).state = QueueSlotState::Simulated;
     }
 
     /// Retrieves the queue slot for the specified tick
     fn queue_slot_at(&mut self, tick: usize) -> &mut QueueSlot {
         assert!(
-            tick >= self.current_tick,
+            tick >= self.next_tick_to_simulate,
             "Attempted to retrieve action queue from the past tick {tick}, currently at {}",
-            self.current_tick
+            self.next_tick_to_simulate
         );
 
         assert!(
-            tick < self.current_tick + ACTION_QUEUE_SLOTS,
+            tick < self.next_tick_to_simulate + ACTION_QUEUE_SLOTS,
             "Attempted to retrieve action queue too far in the future at tick {tick}, currently at {}",
-            self.current_tick
+            self.next_tick_to_simulate
         );
 
+        self.inner_queue_slot_at(tick)
+    }
+
+    /// Retrieves any queue slot, regardless of current state
+    fn inner_queue_slot_at(&mut self, tick: usize) -> &mut QueueSlot {
         &mut self.action_queue[tick % ACTION_QUEUE_SLOTS]
     }
 
     /// Retrieves the queue slot for the specified tick (shared reference)
     fn peek_queue_slot_at(&self, tick: usize) -> &QueueSlot {
         assert!(
-            tick >= self.current_tick,
+            tick >= self.next_tick_to_simulate,
             "Attempted to retrieve action queue from the past tick {tick}, currently at {}",
-            self.current_tick
+            self.next_tick_to_simulate
         );
 
         assert!(
-            tick < self.current_tick + ACTION_QUEUE_SLOTS,
+            tick < self.next_tick_to_simulate + ACTION_QUEUE_SLOTS,
             "Attempted to retrieve action queue too far in the future at tick {tick}, currently at {}",
-            self.current_tick
+            self.next_tick_to_simulate
         );
 
         &self.action_queue[tick % ACTION_QUEUE_SLOTS]
@@ -120,7 +160,7 @@ impl ResTickQueue {
 
     /// Retrieves the queue slot for the current tick, shared
     pub fn current_tick_actions(&self) -> &Vec<Action> {
-        &self.action_queue[self.current_tick % ACTION_QUEUE_SLOTS].actions
+        &self.action_queue[self.next_tick_to_simulate % ACTION_QUEUE_SLOTS].actions
     }
 
     /// Retrieves the queue slot for the latest finalized tick, shared
@@ -130,7 +170,7 @@ impl ResTickQueue {
 
     /// Retrieves the queue slot for the current tick, exclusively
     fn current_queue_slot(&mut self) -> &mut QueueSlot {
-        self.queue_slot_at(self.current_tick)
+        self.queue_slot_at(self.next_tick_to_simulate)
     }
 
     /// Enqueue an action in the next possible tick
@@ -144,9 +184,9 @@ impl ResTickQueue {
 
     pub fn enqueue_action(&mut self, action: Action, tick: usize) {
         assert!(
-            tick > self.current_tick,
+            tick > self.next_tick_to_simulate,
             "Attempted to enqueue an action at past tick {tick}, currently at {}",
-            self.current_tick
+            self.next_tick_to_simulate
         );
 
         self.queue_slot_at(tick).actions.push(action);
@@ -154,9 +194,9 @@ impl ResTickQueue {
 
     pub fn enqueue_actions(&mut self, actions: Vec<Action>, tick: usize) {
         assert!(
-            tick > self.current_tick,
+            tick > self.next_tick_to_simulate,
             "Attempted to enqueue an action at past tick {tick}, currently at {}",
-            self.current_tick
+            self.next_tick_to_simulate
         );
 
         self.queue_slot_at(tick).actions.extend(actions);
@@ -169,7 +209,7 @@ impl ResTickQueue {
         assert!(
             !slot.is_finalized(),
             "Attempted to finalize the current tick {}",
-            self.current_tick
+            self.next_tick_to_simulate
         );
 
         slot.state = QueueSlotState::Finalized;
@@ -198,30 +238,51 @@ impl ResTickQueue {
         self.finalize_tick(tick);
     }
 
-    pub fn advance(&mut self) {
-        // Remove events from current queue slot
-        self.current_queue_slot().reset();
+    pub fn reset_simulated(&mut self) {
+        let last_sim = self.get_last_simulated_tick();
+        self.reset_through(last_sim);
+    }
 
-        // advance the tick counter
-        self.current_tick += 1;
-
-        // Should not advance past the current finalization horizon
+    pub fn reset_through(&mut self, tick: usize) {
         assert!(
-            self.current_queue_slot().is_finalized(),
-            "Attempted to advance past the current action horizon at tick {}",
-            self.current_tick
+            tick < self.get_next_tick_to_simulate(),
+            "Attempted to reset into currently simulated ticks",
         );
 
+        // Reset everything, something else is responsible now
+        for slot in self.first_populated_slot..tick {
+            self.inner_queue_slot_at(slot).reset();
+        }
+
+        self.first_populated_slot = tick;
+    }
+
+    /// Call this when the current tick has been simulated
+    pub fn advance(&mut self, checksum: u64) {
+        // Remove events from current queue slot
+        //self.current_queue_slot().reset();
+        self.current_queue_slot().on_simulated(checksum);
+
+        // advance the tick counter
+        self.next_tick_to_simulate += 1;
+
+        // Should not advance past the current finalization horizon
+        // assert!(
+        //     self.current_queue_slot().is_finalized(),
+        //     "Attempted to advance past the current action horizon at tick {}",
+        //     self.next_tick_to_simulate
+        // );
+
         assert!(
-            self.current_tick <= self.last_finalized_tick,
+            self.get_last_simulated_tick() <= self.last_finalized_tick,
             "Attempted to advance past the finalized tick counter: current {} > finalized {}",
-            self.current_tick,
+            self.next_tick_to_simulate,
             self.last_finalized_tick
         );
     }
 
     pub fn is_next_tick_finalized(&self) -> bool {
-        self.peek_queue_slot_at(self.current_tick + 1)
+        self.peek_queue_slot_at(self.next_tick_to_simulate)
             .is_finalized()
     }
 
@@ -267,7 +328,10 @@ fn basic_test() {
 
     let mut queue = ResTickQueue::new();
 
-    assert_eq!(queue.current_tick, 0, "Tick queue should start at tick 0");
+    assert_eq!(
+        queue.next_tick_to_simulate, 0,
+        "Tick queue should start at tick 0"
+    );
 
     assert_eq!(
         queue.current_tick_actions().len(),
@@ -293,7 +357,7 @@ fn basic_test() {
     queue.finalize_tick(3);
 
     // Advance and check that the action is available
-    queue.advance();
+    queue.advance(0);
     let current_actions = queue.current_tick_actions();
 
     assert_eq!(
@@ -310,7 +374,7 @@ fn basic_test() {
 
     // Advance to the next tick
     // TODO actions are technically not necessarily ordered
-    queue.advance();
+    queue.advance(0);
     let current_actions = queue.current_tick_actions();
 
     assert_eq!(
@@ -334,7 +398,7 @@ fn basic_test() {
     );
 
     // Advance to the next tick (should be empty)
-    queue.advance();
+    queue.advance(0);
     let current_actions = queue.current_tick_actions();
 
     assert_eq!(

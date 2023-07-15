@@ -3,7 +3,7 @@ use fixed::{types::extra::U12, FixedI64};
 use serde::{Deserialize, Serialize};
 
 custom_derive! {
-    #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd, Eq, NewtypeAdd, NewtypeSub, NewtypeMul, NewtypeDiv, NewtypeSubAssign, NewtypeAddAssign, NewtypeMulAssign, NewtypeDivAssign)]
+    #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Hash, NewtypeAdd, NewtypeSub, NewtypeMul, NewtypeDiv, NewtypeSubAssign, NewtypeAddAssign, NewtypeMulAssign, NewtypeDivAssign)]
     pub struct FixedPoint(FixedI64<U12>);
 }
 
