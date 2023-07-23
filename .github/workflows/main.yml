@@ -27,6 +27,8 @@ jobs:
           components: rustfmt, clippy
 
     - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: . -> ./engine/target
 
     - name: Setup Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v3
