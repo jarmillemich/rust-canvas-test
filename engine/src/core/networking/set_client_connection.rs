@@ -1,14 +1,14 @@
 use bevy::{
     ecs::entity::EntityMap,
-    prelude::{AppTypeRegistry, Assets, World, *},
-    scene::{serde::SceneDeserializer, DynamicScene, DynamicSceneBundle},
+    prelude::{AppTypeRegistry, World, *},
+    scene::serde::SceneDeserializer,
 };
 use serde::de::DeserializeSeed;
 
 use crate::{
     core::{
         networking::WorldLoad,
-        scheduling::{CoordinationState, ResActionQueue, ResTickQueue},
+        scheduling::{CoordinationState, ResActionQueue, ResLocalPlayerId, ResTickQueue},
     },
     engine::{ResLogger, SimulationState},
     utils::log,
@@ -193,6 +193,25 @@ fn sys_try_load_world(world: &mut World) {
     ));
 }
 
+fn sys_receive_config(
+    mut network_queue: ResMut<ResNetworkQueue>,
+    client_connection: Res<ConnectionToHost>,
+    mut local_player_id: ResMut<ResLocalPlayerId>,
+) {
+    // Receive the config
+    let mut config = network_queue.take_inbound(&client_connection.channel_id, |msg| {
+        matches!(msg, NetworkMessage::SetClientConfig { .. })
+    });
+
+    if let Some(NetworkMessage::SetClientConfig { player_id }) = config.pop() {
+        log(format!(
+            "[client] Received config, player id is {:?}",
+            player_id
+        ));
+        local_player_id.0 = Some(player_id);
+    }
+}
+
 pub fn attach_to_app(app: &mut App) {
     use crate::engine::SimulationSet;
 
@@ -220,5 +239,6 @@ pub fn attach_to_app(app: &mut App) {
                     .and_then(in_state(ClientJoinState::Connected)),
             ),
         )
-        .add_system(sys_initial_connect.run_if(in_state(ClientJoinState::NeedsSendInitialPing)));
+        .add_system(sys_initial_connect.run_if(in_state(ClientJoinState::NeedsSendInitialPing)))
+        .add_system(sys_receive_config.run_if(resource_exists::<ConnectionToHost>()));
 }

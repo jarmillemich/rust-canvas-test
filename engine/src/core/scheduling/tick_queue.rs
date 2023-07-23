@@ -1,7 +1,6 @@
 use bevy::prelude::Resource;
 
-use super::Action;
-use crate::core::networking::NetworkMessage;
+use crate::core::{networking::NetworkMessage, scheduling::Action};
 
 const ACTION_QUEUE_SLOTS: usize = 128;
 
@@ -266,13 +265,6 @@ impl ResTickQueue {
         // advance the tick counter
         self.next_tick_to_simulate += 1;
 
-        // Should not advance past the current finalization horizon
-        // assert!(
-        //     self.current_queue_slot().is_finalized(),
-        //     "Attempted to advance past the current action horizon at tick {}",
-        //     self.next_tick_to_simulate
-        // );
-
         assert!(
             self.get_last_simulated_tick() <= self.last_finalized_tick,
             "Attempted to advance past the finalized tick counter: current {} > finalized {}",
@@ -324,13 +316,26 @@ impl ResTickQueue {
 
 #[test]
 fn basic_test() {
-    use crate::core::scheduling::Direction;
+    use crate::core::scheduling::{Direction, PlayerAction, PlayerId};
+
+    /// Asserts that the given action is a player action with the given player id and action
+    macro_rules! assert_player_action {
+        ($action:expr, $expected_action:expr, $expected_player_id:expr, $($arg:tt)+) => {
+            match &$action {
+                Action::PlayerAction { player_id, action } => {
+                    assert_eq!(*player_id, $expected_player_id, $($arg)+);
+                    assert_eq!(*action, $expected_action, $($arg)+);
+                },
+                _ => panic!($($arg)+),
+            }
+        };
+    }
 
     let mut queue = ResTickQueue::new();
 
     assert_eq!(
-        queue.next_tick_to_simulate, 0,
-        "Tick queue should start at tick 0"
+        queue.next_tick_to_simulate, 1,
+        "Tick queue should start at tick 1"
     );
 
     assert_eq!(
@@ -340,36 +345,36 @@ fn basic_test() {
     );
 
     // Queue up an action in the next tick
-    queue.finalize_tick_with_actions(1, vec![Action::Jump]);
+    queue.finalize_tick_with_actions(1, vec![PlayerAction::Jump.for_player(PlayerId(0))]);
 
     // Queue up a couple actions in the subsequent tick
     queue.finalize_tick_with_actions(
         2,
         vec![
-            Action::Fire,
-            Action::StartMoving {
+            PlayerAction::Fire.for_player(PlayerId(1)),
+            PlayerAction::StartMoving {
                 dir: Direction::Right,
-            },
+            }
+            .for_player(PlayerId(2)),
         ],
     );
 
     // And finalize one last empty tick
     queue.finalize_tick(3);
 
-    // Advance and check that the action is available
-    queue.advance(0);
     let current_actions = queue.current_tick_actions();
 
     assert_eq!(
         current_actions.len(),
         1,
-        "Tick queue should have 1 action after advancing to tick 1"
+        "Tick queue should have 1 action in tick 1"
     );
 
-    assert_eq!(
+    assert_player_action!(
         current_actions[0],
-        Action::Jump,
-        "Tick queue should have a jump action after advancing to tick 1"
+        PlayerAction::Jump,
+        PlayerId(0),
+        "Tick queue should have a jump action in tick 1"
     );
 
     // Advance to the next tick
@@ -383,17 +388,19 @@ fn basic_test() {
         "Tick queue should have 2 actions after advancing to tick 2"
     );
 
-    assert_eq!(
+    assert_player_action!(
         current_actions[0],
-        Action::Fire,
+        PlayerAction::Fire,
+        PlayerId(1),
         "Tick queue should have a fire action after advancing to tick 2"
     );
 
-    assert_eq!(
+    assert_player_action!(
         current_actions[1],
-        Action::StartMoving {
+        PlayerAction::StartMoving {
             dir: Direction::Right
         },
+        PlayerId(2),
         "Tick queue should have a start moving action after advancing to tick 2"
     );
 

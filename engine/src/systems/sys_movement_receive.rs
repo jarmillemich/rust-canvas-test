@@ -1,23 +1,40 @@
 use crate::{
     components::physics::{MovementReceiver, Velocity},
-    core::scheduling::{Action, ResTickQueue},
+    core::{
+        networking::NetworkControlTarget,
+        scheduling::{Action, PlayerAction, ResTickQueue},
+    },
 };
 use bevy::prelude::*;
 
 pub fn sys_movement_receive(
     tc: Res<ResTickQueue>,
-    mut query: Query<(&mut MovementReceiver, &mut Velocity)>,
+    mut query: Query<(&mut MovementReceiver, &mut Velocity, &NetworkControlTarget)>,
 ) {
     for action in tc.current_tick_actions() {
         match action {
-            Action::StartMoving { dir } => {
-                for (mut mr, mut vel) in &mut query {
+            Action::PlayerAction {
+                action: PlayerAction::StartMoving { dir },
+                player_id,
+            } => {
+                for (mut mr, mut vel, pid) in &mut query {
+                    if pid.player_id != *player_id {
+                        continue;
+                    }
+
                     mr.direction = mr.direction.or(*dir);
                     mr.apply(&mut vel);
                 }
             }
-            Action::StopMoving { dir } => {
-                for (mut mr, mut vel) in &mut query {
+            Action::PlayerAction {
+                action: PlayerAction::StopMoving { dir },
+                player_id,
+            } => {
+                for (mut mr, mut vel, pid) in &mut query {
+                    if pid.player_id != *player_id {
+                        continue;
+                    }
+
                     mr.direction = mr.direction.and(dir.not());
                     mr.apply(&mut vel);
                 }

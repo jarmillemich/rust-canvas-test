@@ -1,5 +1,5 @@
 use crate::{
-    core::scheduling::{ResActionQueue, ResTickQueue},
+    core::scheduling::{Action, PlayerId, ResActionQueue, ResTickQueue},
     engine::ResLogger,
     utils::log,
 };
@@ -58,6 +58,7 @@ pub struct ClientConnection {
     pub channel_id: ChannelId,
     pub last_finalized_tick: usize,
     connection_state: ClientConnectionState,
+    pub player_id: PlayerId,
 }
 
 #[derive(Default)]
@@ -70,11 +71,12 @@ enum ClientConnectionState {
 }
 
 impl ClientConnection {
-    pub fn new(channel_id: ChannelId) -> Self {
+    pub fn new(channel_id: ChannelId, player_id: PlayerId) -> Self {
         Self {
             channel_id,
             last_finalized_tick: 0,
             connection_state: ClientConnectionState::WaitingForHello,
+            player_id,
         }
     }
 
@@ -106,6 +108,8 @@ impl ClientConnection {
 pub fn sys_send_world(world: &mut World) {
     let mut query = world.query::<&mut ClientConnection>();
 
+    let mut to_spawn = Vec::new();
+
     if query.iter(world).any(|client| client.needs_world_send()) {
         log("[conn] Sending world to one or more clients".into());
 
@@ -123,14 +127,33 @@ pub fn sys_send_world(world: &mut World) {
 
         query.for_each_mut(world, |mut client_connection| {
             if client_connection.needs_world_send() {
+                // Send them the world
                 to_send.push((client_connection.channel_id, message.clone()));
+
+                // Send them their config
+                to_send.push((
+                    client_connection.channel_id,
+                    NetworkMessage::SetClientConfig {
+                        player_id: client_connection.player_id.clone(),
+                    },
+                ));
+
                 client_connection.on_world_send(last_simulated_tick);
+
+                // Spawn an entity for them
+                to_spawn.push(client_connection.player_id.clone());
             }
         });
 
         let mut network_queue = world.get_resource_mut::<ResNetworkQueue>().unwrap();
         for (channel_id, message) in to_send {
             network_queue.send(&channel_id, message);
+        }
+
+        // Spawn anybody new
+        for player_id in to_spawn {
+            let mut action_queue = world.get_resource_mut::<ResActionQueue>().unwrap();
+            action_queue.add_action(Action::SpawnPlayer { player_id });
         }
     }
 }

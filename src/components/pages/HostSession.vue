@@ -39,6 +39,7 @@ onMounted(() => {
 onUnmounted(() => {
   // Clean up our resources
   console.log('Cleaning up')
+  engine.stop()
   engine.free()
 })
 </script>

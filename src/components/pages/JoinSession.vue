@@ -50,6 +50,7 @@ async function start_game() {
 onUnmounted(() => {
   // Clean up our resources
   console.log('Cleaning up')
+  engine.stop()
   engine.free()
 })
 </script>

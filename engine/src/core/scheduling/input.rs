@@ -7,7 +7,7 @@ use bevy::prelude::{Res, ResMut, Resource};
 use wasm_bindgen::{convert::FromWasmAbi, prelude::*};
 use web_sys::{EventTarget, HtmlCanvasElement};
 
-use super::{Action, Direction, ResActionQueue};
+use super::{Action, Direction, PlayerAction, ResActionQueue, ResLocalPlayerId};
 
 #[allow(unused)]
 pub enum InputEvent {
@@ -105,34 +105,44 @@ impl ResEventQueue {
     }
 }
 
-pub fn sys_input(mut action_queue: ResMut<ResActionQueue>, event_queue: Res<ResEventQueue>) {
+pub fn sys_input(
+    mut action_queue: ResMut<ResActionQueue>,
+    event_queue: Res<ResEventQueue>,
+    player_id: Res<ResLocalPlayerId>,
+) {
+    // Ensure we have a player id
+    let player_id = match &player_id.0 {
+        Some(player_id) => player_id,
+        None => return,
+    };
+
     // TODO does this keep the lock for the entire loop?
     for event in event_queue.items().lock().unwrap().drain(..) {
-        let action: Action = match event {
+        let action: PlayerAction = match event {
             InputEvent::KeyDown { key } => match key.as_str() {
-                "w" => Action::StartMoving { dir: Direction::Up },
-                "a" => Action::StartMoving {
+                "w" => PlayerAction::StartMoving { dir: Direction::Up },
+                "a" => PlayerAction::StartMoving {
                     dir: Direction::Left,
                 },
-                "s" => Action::StartMoving {
+                "s" => PlayerAction::StartMoving {
                     dir: Direction::Down,
                 },
-                "d" => Action::StartMoving {
+                "d" => PlayerAction::StartMoving {
                     dir: Direction::Right,
                 },
-                " " => Action::Fire,
+                " " => PlayerAction::Fire,
                 _ => continue,
             },
 
             InputEvent::KeyUp { key } => match key.as_str() {
-                "w" => Action::StopMoving { dir: Direction::Up },
-                "a" => Action::StopMoving {
+                "w" => PlayerAction::StopMoving { dir: Direction::Up },
+                "a" => PlayerAction::StopMoving {
                     dir: Direction::Left,
                 },
-                "s" => Action::StopMoving {
+                "s" => PlayerAction::StopMoving {
                     dir: Direction::Down,
                 },
-                "d" => Action::StopMoving {
+                "d" => PlayerAction::StopMoving {
                     dir: Direction::Right,
                 },
                 _ => continue,
@@ -142,6 +152,9 @@ pub fn sys_input(mut action_queue: ResMut<ResActionQueue>, event_queue: Res<ResE
         };
 
         // Request that the action be scheduled
-        action_queue.add_action(action);
+        action_queue.add_action(Action::PlayerAction {
+            action,
+            player_id: player_id.clone(),
+        });
     }
 }

@@ -17,20 +17,19 @@ use crate::{
     },
     core::{
         networking::{
-            channels::ResChannelManager, serialize_world, ChannelId, ClientConnection,
-            ConnectionToHost, NetworkChannel, RtcNetworkChannel,
+            channels::ResChannelManager, ChannelId, ClientConnection, ConnectionToHost,
+            NetworkChannel, NetworkControlTarget, RtcNetworkChannel,
         },
-        scheduling::{CoordinationState, ResEventQueue, ResTickQueue},
+        scheduling::{
+            Action, CoordinationState, PlayerId, ResActionQueue, ResEventQueue, ResLocalPlayerId,
+            ResPlayerIdGenerator, ResTickQueue,
+        },
     },
     renderer::init_renderer,
     systems,
     utils::{debug_variable, log},
 };
-use bevy::{
-    ecs::{entity::Entities, schedule::ScheduleLabel},
-    prelude::*,
-    scene::ScenePlugin,
-};
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*, scene::ScenePlugin};
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{HtmlCanvasElement, RtcDataChannel};
 
@@ -107,6 +106,9 @@ impl Engine {
                 .set(SimulationState::Running);
 
             app.insert_resource(ResLogger::new("LOCAL"));
+            let mut id_gen = ResPlayerIdGenerator::default();
+            app.insert_resource(ResLocalPlayerId(Some(id_gen.get_next_id())));
+            app.insert_resource(id_gen);
         }
 
         self.set_coord_state(CoordinationState::ConnectedLocal);
@@ -125,6 +127,9 @@ impl Engine {
                 .set(SimulationState::Running);
 
             app.insert_resource(ResLogger::new("HOST"));
+            let mut id_gen = ResPlayerIdGenerator::default();
+            app.insert_resource(ResLocalPlayerId(Some(id_gen.get_next_id())));
+            app.insert_resource(id_gen);
         }
 
         self.set_coord_state(CoordinationState::Hosting);
@@ -161,7 +166,9 @@ impl Engine {
         app.insert_non_send_resource(init_renderer(canvas).unwrap())
             .insert_resource(ResEventQueue::new_with_canvas(canvas))
             .add_system(systems::sys_renderer)
-            .add_system(crate::core::scheduling::sys_input);
+            .add_system(
+                crate::core::scheduling::sys_input.run_if(resource_exists::<ResLocalPlayerId>()),
+            );
     }
 
     fn tick(&self) {
@@ -219,10 +226,15 @@ impl Engine {
             "Must be hosting to accept clients"
         );
 
+        // TODO reconnection
+        let player_id = self.get_next_player_id();
+
         // Add to the session
         let channel_id = self.register_channel(channel);
-        let client_connection = ClientConnection::new(channel_id);
+        let client_connection = ClientConnection::new(channel_id, player_id);
         self.app.lock().unwrap().world.spawn((client_connection,));
+
+        // TODO spawn them in now or when they are ready?
     }
 
     /// Connects to a remote session as a client
@@ -243,7 +255,18 @@ impl Engine {
                 .set(ClientJoinState::NeedsSendInitialPing);
 
             app.insert_resource(ResLogger::new("CLIENT"));
+            app.insert_resource(ResLocalPlayerId::default());
         }
+    }
+
+    fn get_next_player_id(&self) -> PlayerId {
+        let mut app = self.app.lock().unwrap();
+        let mut player_id = app
+            .world
+            .get_resource_mut::<ResPlayerIdGenerator>()
+            .unwrap();
+
+        player_id.get_next_id()
     }
 }
 
@@ -262,7 +285,11 @@ impl Engine {
     }
 }
 
-fn sys_init_world(mut commands: Commands) {
+fn sys_init_world(
+    mut commands: Commands,
+    local_player_id: Res<ResLocalPlayerId>,
+    mut action_queue: ResMut<ResActionQueue>,
+) {
     // Some test entities that are affected by gravity
     for x in 0..8 {
         commands.spawn((
@@ -274,15 +301,26 @@ fn sys_init_world(mut commands: Commands) {
         ));
     }
 
-    // A movable gravity emitter
-    commands.spawn((
-        Position::new_f32(0., 0.),
-        Velocity::new_f32(0., 0.),
-        GravityEmitter,
-        MovementReceiver::new(),
-        Color::new(0, 0, 0, 255),
-        DrawCircle::new(8.),
-    ));
+    action_queue.add_action(Action::SpawnPlayer {
+        player_id: local_player_id.0.as_ref().unwrap().clone(),
+    });
+}
+
+fn sys_spawn_players(mut commands: Commands, tick_coordinator: Res<ResTickQueue>) {
+    for action in tick_coordinator.current_tick_actions() {
+        if let Action::SpawnPlayer { player_id } = action {
+            // A movable gravity emitter
+            commands.spawn((
+                Position::new_f32(0., 0.),
+                Velocity::new_f32(0., 0.),
+                GravityEmitter,
+                MovementReceiver::new(),
+                Color::new(0, 0, 0, 255),
+                DrawCircle::new(8.),
+                NetworkControlTarget::new(player_id),
+            ));
+        }
+    }
 }
 
 #[derive(States, PartialEq, Debug, Clone, Hash, Default, Eq)]
@@ -366,6 +404,7 @@ impl ResLogger {
 }
 
 fn init_app() -> App {
+    // TODO this is a great mess, figure out some better organization
     let mut app = App::new();
 
     app.add_state::<SimulationState>();
@@ -378,6 +417,7 @@ fn init_app() -> App {
         systems::sys_fire_receive,
         systems::sys_movement.after(systems::sys_movement_receive),
         systems::sys_gravity,
+        sys_spawn_players,
     );
 
     // Register systems

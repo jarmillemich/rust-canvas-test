@@ -3,7 +3,10 @@ use crate::{
         graphics::{Color, DrawCircle},
         physics::{Gravity, MovementReceiver, Position, Velocity},
     },
-    core::scheduling::{Action, ResTickQueue},
+    core::{
+        networking::NetworkControlTarget,
+        scheduling::{Action, PlayerAction, ResTickQueue},
+    },
     utils::log,
 };
 use bevy::prelude::*;
@@ -12,12 +15,19 @@ pub fn sys_fire_receive(
     world: &World,
     mut commands: Commands,
     tc: Res<ResTickQueue>,
-    query: Query<(&MovementReceiver, &Position)>,
+    query: Query<(&MovementReceiver, &Position, &NetworkControlTarget)>,
 ) {
     for action in tc.current_tick_actions() {
         match action {
-            Action::Fire => {
-                for (_, pos) in query.iter() {
+            Action::PlayerAction {
+                action: PlayerAction::Fire,
+                player_id,
+            } => {
+                for (_, pos, pid) in query.iter() {
+                    if pid.player_id != *player_id {
+                        continue;
+                    }
+
                     // Spawn some more particles
                     for i in 0..8 {
                         let theta = i as f32 * 2. * std::f32::consts::PI / 8.;

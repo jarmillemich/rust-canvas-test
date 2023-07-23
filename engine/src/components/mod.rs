@@ -20,5 +20,7 @@ pub fn register_components(app: &mut App) {
         .register_type::<physics::Gravity>()
         .register_type::<physics::GravityEmitter>()
         .register_type::<physics::MovementReceiver>()
-        .register_type::<crate::core::scheduling::Direction>();
+        .register_type::<crate::core::scheduling::Direction>()
+        .register_type::<crate::core::networking::NetworkControlTarget>()
+        .register_type::<crate::core::scheduling::PlayerId>();
 }
