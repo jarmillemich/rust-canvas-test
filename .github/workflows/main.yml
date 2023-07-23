@@ -19,12 +19,14 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install latest nightly
+    - name: Install latest Rust toolchain
       uses: actions-rs/toolchain@v1
       with:
           toolchain: stable
           override: true
           components: rustfmt, clippy
+
+    - uses: Swatinem/rust-cache@v2
 
     - name: Setup Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v3
@@ -32,7 +34,7 @@ jobs:
         node-version: ${{ matrix.node-version }}
 
     - name: Install dependencies
-      run: npm ci
+      run: pnpm install
 
     - name: Build Engine
       run: npm run build:engine
